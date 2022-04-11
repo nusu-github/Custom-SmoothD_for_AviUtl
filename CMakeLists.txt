@@ -3,6 +3,8 @@ project(Custom-SmoothD_for_AviUtl)
 
 include_directories(./include)
 add_library(Custom-SmoothDfA SHARED ./src/SmoothDfA.cpp ./src/idct_int32.c ./src/idct_clip_table.c ./src/SmoothDfA.def)
+set_target_properties(Custom-SmoothDfA PROPERTIES PREFIX "")
+set_target_properties(Custom-SmoothDfA PROPERTIES OUTPUT_NAME "Custom-SmoothDfA")
 set_target_properties(Custom-SmoothDfA PROPERTIES SUFFIX ".auf")
 
 include(CheckIPOSupported)
@@ -31,4 +33,6 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
+
+    set(CMAKE_SHARED_LINKER_FLAGS "-static ${CMAKE_SHARED_LINKER_FLAGS} -Wl,--enable-stdcall-fixup,-kill-at")
 endif()
