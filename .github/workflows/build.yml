@@ -1,0 +1,108 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  msvc:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        build_configuration: [Debug, Release]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: mingw32
+          pacboy: >-
+            toolchain:p
+            cmake:p
+            ninja:p
+
+      - name: Build
+        working-directory: ${{env.GITHUB_WORKSPACE}}
+        shell: msys2 {0}
+        run: |
+          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }}
+          cmake --build build
+
+      - name: Create archive
+        working-directory: ${{env.GITHUB_WORKSPACE}}
+        run: |
+          7z a msvc_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: msvc
+          path: |
+            msvc_${{ matrix.build_configuration }}.zip
+
+  msys2:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        build_configuration: [Debug, Release]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup ninja
+        run: |
+          choco install ninja -y
+
+      - name: Enable Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1.10.0
+        with:
+          arch: win32
+
+      - name: Build
+        working-directory: ${{env.GITHUB_WORKSPACE}}
+        run: |
+          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }}
+          cmake --build build
+
+      - name: Create archive
+        working-directory: ${{env.GITHUB_WORKSPACE}}
+        run: |
+          7z a msys2_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: msys2
+          path: |
+            msys2_${{ matrix.build_configuration }}.zip README.md
+
+  create_release:
+    name: Create release
+    needs: [msvc, msys2]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: "Development Build"
+          files: |
+            artifacts/*.zip
