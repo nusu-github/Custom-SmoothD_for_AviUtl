@@ -15,22 +15,21 @@ jobs:
 
     strategy:
       matrix:
+        msystem: [mingw32, clang32]
         build_configuration: [Debug, Release]
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Add MSBuild to PATH
-        uses: microsoft/setup-msbuild@v1.1
-
-      - name: Setup ninja
-        run: |
-          choco install ninja -y
-
-      - name: Enable Developer Command Prompt
-        uses: ilammy/msvc-dev-cmd@v1.10.0
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
         with:
-          arch: win32
+          update: true
+          msystem: ${{ matrix.msystem }}
+          pacboy: >-
+            toolchain:p
+            cmake:p
+            ninja:p
 
       - name: Build
         working-directory: ${{env.GITHUB_WORKSPACE}}
@@ -41,4 +40,4 @@ jobs:
       - name: auf check
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          dumpbin build\Custom-SmoothDfA.auf
+          objdump build\Custom-SmoothDfA.auf
