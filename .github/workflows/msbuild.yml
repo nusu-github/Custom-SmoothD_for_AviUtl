@@ -34,8 +34,3 @@ jobs:
         run: |
           cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }}
           cmake --build build
-
-      - name: auf check
-        working-directory: ${{env.GITHUB_WORKSPACE}}
-        run: |
-          dumpbin build\Custom-SmoothDfA.auf
