@@ -7,10 +7,10 @@ on:
     branches: [master]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  msvc:
+  msys2:
     runs-on: windows-latest
 
     strategy:
@@ -40,16 +40,16 @@ jobs:
       - name: Create archive
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          7z a msvc_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
+          7z a msys2_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: msvc
+          name: msys2
           path: |
-            msvc_${{ matrix.build_configuration }}.zip
+            msys2_${{ matrix.build_configuration }}.zip
 
-  msys2:
+  msvc:
     runs-on: windows-latest
 
     strategy:
@@ -77,14 +77,14 @@ jobs:
       - name: Create archive
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          7z a msys2_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf
+          7z a msvc_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: msys2
+          name: msvc
           path: |
-            msys2_${{ matrix.build_configuration }}.zip README.md
+            msvc_${{ matrix.build_configuration }}.zip
 
   create_release:
     name: Create release
