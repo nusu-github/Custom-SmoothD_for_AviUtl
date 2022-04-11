@@ -22,6 +22,8 @@ jobs:
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v1.1
+        with:
+          msbuild-architecture: x64
 
       - name: Setup ninja
         run: |
@@ -29,6 +31,8 @@ jobs:
 
       - name: Enable Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1.10.0
+        with:
+          arch: amd64_x86
 
       - name: Build
         working-directory: ${{env.GITHUB_WORKSPACE}}
