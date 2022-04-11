@@ -1,4 +1,4 @@
-name: MSBuild
+name: MSYS2build
 
 on:
   push:
@@ -15,7 +15,6 @@ jobs:
 
     strategy:
       matrix:
-        msystem: [mingw32, clang32]
         build_configuration: [Debug, Release]
 
     steps:
@@ -25,7 +24,7 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           update: true
-          msystem: ${{ matrix.msystem }}
+          msystem: mingw32
           pacboy: >-
             toolchain:p
             cmake:p

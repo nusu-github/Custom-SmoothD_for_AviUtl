@@ -20,9 +20,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Add MSBuild to PATH
-        uses: microsoft/setup-msbuild@v1.1
-
       - name: Setup ninja
         run: |
           choco install ninja -y
