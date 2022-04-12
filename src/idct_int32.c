@@ -21,7 +21,7 @@
 #define FIX_3_072711026 25171
 
 void __stdcall idct_int32(int *block) {
-  int i = 0;
+  int i;
 
   int w0;
   int w1;
@@ -118,7 +118,7 @@ void __stdcall idct_int32(int *block) {
     if ((w[1 * 8] | w[2 * 8] | w[3 * 8] | w[4 * 8] | w[5 * 8] | w[6 * 8] |
          w[7 * 8]) == 0) {
       d[0 * 8] = d[1 * 8] = d[2 * 8] = d[3 * 8] = d[4 * 8] = d[5 * 8] =
-          d[6 * 8] = d[7 * 8] =
+          d[6 * 8]                                         = d[7 * 8] =
               idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w[0] + 64) >> 7)];
       w += 1;
       d += 1;

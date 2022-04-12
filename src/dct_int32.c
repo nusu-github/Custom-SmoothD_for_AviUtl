@@ -2,7 +2,6 @@
   DCT module used LLM algorithm (based IJG jfdctint.c)
  *******************************************************************/
 
-// ReSharper disable CppRedundantParentheses
 #define DCT_INT32_C
 #include "dct_int32.h"
 
@@ -20,7 +19,7 @@
 #define FIX_3_072711026 25171
 
 void __stdcall dct_int32(int *block) {
-  int i = 0;
+  int i;
 
   int w0;
   int w1;
@@ -62,7 +61,7 @@ void __stdcall dct_int32(int *block) {
     w[0] = (w10 + w11) << 4;
     w[4] = (w10 - w11) << 4;
 
-    z1 = (w12 + w13) * FIX_0_541196100;
+    z1   = (w12 + w13) * FIX_0_541196100;
     w[2] = (z1 + w13 * FIX_0_765366865) >> 9;
     w[6] = (z1 + w12 * -FIX_1_847759065) >> 9;
 
@@ -92,7 +91,7 @@ void __stdcall dct_int32(int *block) {
     s += 8;
   }
 
-  w = block;
+  w      = block;
   int *d = block;
   for (i = 0; i < 8; i++) {
     /* col DCT */
@@ -112,7 +111,7 @@ void __stdcall dct_int32(int *block) {
 
     d[8 * 0] = (w10 + w11 + (1 << 6)) >> 7;
     d[8 * 4] = (w10 - w11 + (1 << 6)) >> 7;
-    z1 = (w12 + w13) * FIX_0_541196100;
+    z1       = (w12 + w13) * FIX_0_541196100;
     d[8 * 2] = (z1 + w13 * FIX_0_765366865 + (1 << 19)) >> 20;
     d[8 * 6] = (z1 + w12 * -FIX_1_847759065 + (1 << 19)) >> 20;
 

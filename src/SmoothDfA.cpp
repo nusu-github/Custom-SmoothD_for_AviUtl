@@ -67,11 +67,11 @@ AviUtlでは、速度と作者の趣味のため、直交変換にアダマール変換を使用しています。と
  *	ここまで増えたら構造体を使うべきなのでしょうか……?
  */
 struct smoothdfa_struct {
-  int threshold{};            // 閾値
-  int quantization{};         // 量子化係数
-  boolean rounding_on{};      // 8ビットの計算を丸めるか
-  boolean all_quantization{}; // すべて量子化するか
-  boolean dct_on{};           // 離散コサイン変換を使うか
+  int  threshold{};        // 閾値
+  int  quantization{};     // 量子化係数
+  bool rounding_on{};      // 8ビットの計算を丸めるか
+  bool all_quantization{}; // すべて量子化するか
+  bool dct_on{};           // 離散コサイン変換を使うか
 };
 
 smoothdfa_struct smoothdfa;
@@ -176,35 +176,37 @@ EXTERN_C FILTER_DLL __declspec(dllexport) * __stdcall GetFilterTable(void) {
 //---------------------------------------------------------------------
 void shift_data(int thread_id, int thread_num, void *param1, void *param2);
 void Loop(int thread_id, int thread_num, void *param1, void *param2);
-int get_multi_thread(FILTER *fp);
+auto get_multi_thread(FILTER *fp) -> int;
 void copy_pix(FILTER_PROC_INFO *fpip, PIXEL_YC *wsp, int shiftx, int shifty);
 
 //---------------------------------------------------------------------
 //		フィルタ処理関数
 //---------------------------------------------------------------------
-BOOL func_proc(FILTER *fp, FILTER_PROC_INFO *fpip) {
-  int i;
+auto func_proc(FILTER *fp, FILTER_PROC_INFO *fpip) -> BOOL {
+  int       i;
   const int pictur_size = fpip->w * fpip->h;
-  PIXEL_YC temp;
+  PIXEL_YC  temp;
 
   //トラック番号を間違えないためトラックの値を変数に代入しておく
   smoothdfa.threshold =
       fp->track
           [0]; //閾値。直交変換後の周波数の値がこの値以下ならば量子化を行う。
   smoothdfa.quantization = fp->track[1]; //量子化係数。
-  const int n_shift = fp->track[2];      // DCT-iDCTを実行する回数
+  const int n_shift      = fp->track[2]; // DCT-iDCTを実行する回数
   const int zero_weight =
       fp->track[3]; //ノイズ除去後の画像に混ぜる元の画像の割合
-  smoothdfa.rounding_on = static_cast<boolean>(fp->check[0]);
-  smoothdfa.all_quantization = static_cast<boolean>(fp->check[1]);
-  smoothdfa.dct_on = static_cast<boolean>(fp->check[2]);
+  smoothdfa.rounding_on      = static_cast<bool>(fp->check[0]);
+  smoothdfa.all_quantization = static_cast<bool>(fp->check[1]);
+  smoothdfa.dct_on           = static_cast<bool>(fp->check[2]);
 
   //マルチスレッド数を取得
   const int MT = get_multi_thread(fp);
 
   //マルチスレッド数だけ画像サイズのメモリを確保して0で埋める。
   work_space = new PIXEL_YC[sizeof(PIXEL_YC) * pictur_size * MT];
+#ifdef DEBUG
   ZeroMemory(work_space, (sizeof(PIXEL_YC) * pictur_size * MT));
+#endif
 
   //"0"で埋めなくとも問題なく動作します。デフォルトコンストラクタが"0"ということ、なのでしょうか?
   //この処理をしないとかなり処理速度が上がるため、とりあえず行わないことに。
@@ -271,10 +273,10 @@ void shift_data(int thread_id, int thread_num, void *param1,
   //マルチスレッド対応サンプルフィルタの方法そのままでマルチスレッド処理をしています
   const FILTER_PROC_INFO *fpip = static_cast<FILTER_PROC_INFO *>(param1);
 
-  const boolean rounding_on = smoothdfa.rounding_on;
+  const bool rounding_on = smoothdfa.rounding_on;
   //	スレッド毎の画像を処理する場所を計算する
   int y_start = fpip->h * thread_id / thread_num;
-  int y_end = fpip->h * (thread_id + 1) / thread_num;
+  int y_end   = fpip->h * (thread_id + 1) / thread_num;
 
   /*
    *	12ビットは一般的でないことと、加算していくと飽和してしまうかもしれないので、画素データのビット数を落とす。
@@ -284,7 +286,7 @@ void shift_data(int thread_id, int thread_num, void *param1,
     PIXEL_YC *ycp = fpip->ycp_edit + y * fpip->max_w;
     for (int x = 0; x < fpip->w; x++) {
       if (rounding_on) {
-        ycp->y = (ycp->y * 100 / 16 + 45) / 100;
+        ycp->y  = (ycp->y * 100 / 16 + 45) / 100;
         ycp->cb = (ycp->cb > 0) ? (ycp->cb * 100 / 16 + 45) / 100
                                 : (ycp->cb * 100 / 16 - 45) / 100;
         ycp->cr = (ycp->cr > 0) ? (ycp->cr * 100 / 16 + 45) / 100
@@ -305,13 +307,13 @@ void shift_data(int thread_id, int thread_num, void *param1,
 void Loop(int thread_id, int /*thread_num*/, void *param1, void *param2) {
   auto *fpip = static_cast<FILTER_PROC_INFO *>(param1);
 
-  const int threshold = smoothdfa.threshold;
-  const int quantization = smoothdfa.quantization;
-  const boolean all_quantization = smoothdfa.all_quantization;
-  const boolean dct_on = smoothdfa.dct_on;
+  const int  threshold        = smoothdfa.threshold;
+  const int  quantization     = smoothdfa.quantization;
+  const bool all_quantization = smoothdfa.all_quantization;
+  const bool dct_on           = smoothdfa.dct_on;
 
-  int x;
-  int y;
+  int       x;
+  int       y;
   PIXEL_YC *ycp;
 
   /*
@@ -335,7 +337,7 @@ void Loop(int thread_id, int /*thread_num*/, void *param1, void *param2) {
       for (y = 0; y < 8; y++) {
         ycp = fpip->ycp_edit + (y + yblock) * fpip->max_w + xblock;
         for (x = 0; x < 8; x++) {
-          block[x + y * 8] = ycp->y;
+          block[x + y * 8]   = ycp->y;
           blockCb[x + y * 8] = ycp->cb;
           blockCr[x + y * 8] = ycp->cr;
           ycp++;
@@ -411,11 +413,11 @@ void Loop(int thread_id, int /*thread_num*/, void *param1, void *param2) {
 void multi_thread_count(int /*thread_id*/, int thread_num, void *param1,
                         void * /*param2*/) {
   auto *MT_temp = static_cast<int *>(param1);
-  MT_temp[0] = thread_num;
+  MT_temp[0]    = thread_num;
 }
 
-int get_multi_thread(FILTER *fp) {
-  const int MT_temp[1] = {0};
+auto get_multi_thread(FILTER *fp) -> int {
+  int MT_temp[1] = {0};
 
   fp->exfunc->exec_multi_thread_func(multi_thread_count, (void *)MT_temp,
                                      static_cast<void *>(nullptr));
@@ -432,13 +434,13 @@ int get_multi_thread(FILTER *fp) {
 長くなるので関数にして隔離。
 */
 void copy_pix(FILTER_PROC_INFO *fpip, PIXEL_YC *wsp, int shiftx, int shifty) {
-  int x;
-  int y;
+  int       x;
+  int       y;
   PIXEL_YC *ycp;
   PIXEL_YC *ycp2;
 
   for (y = 0; y < shifty; y++) {
-    ycp = fpip->ycp_edit + y * fpip->max_w;
+    ycp  = fpip->ycp_edit + y * fpip->max_w;
     ycp2 = wsp + y * fpip->w;
     for (x = 0; x < fpip->w; x++) {
       ycp2->y += ycp->y;
@@ -450,7 +452,7 @@ void copy_pix(FILTER_PROC_INFO *fpip, PIXEL_YC *wsp, int shiftx, int shifty) {
   }
 
   for (y = fpip->h - (8 - shifty); y < fpip->h; y++) {
-    ycp = fpip->ycp_edit + y * fpip->max_w;
+    ycp  = fpip->ycp_edit + y * fpip->max_w;
     ycp2 = wsp + y * fpip->w;
     for (x = 0; x < fpip->w; x++) {
       ycp2->y += ycp->y;
@@ -462,7 +464,7 @@ void copy_pix(FILTER_PROC_INFO *fpip, PIXEL_YC *wsp, int shiftx, int shifty) {
   }
 
   for (y = shifty; y < fpip->h - (8 - shifty); y++) {
-    ycp = fpip->ycp_edit + y * fpip->max_w;
+    ycp  = fpip->ycp_edit + y * fpip->max_w;
     ycp2 = wsp + y * fpip->w;
     for (x = 0; x < shiftx; x++) {
       ycp2->y += ycp->y;
@@ -474,7 +476,7 @@ void copy_pix(FILTER_PROC_INFO *fpip, PIXEL_YC *wsp, int shiftx, int shifty) {
   }
 
   for (y = shifty; y < fpip->h - (8 - shifty); y++) {
-    ycp = fpip->ycp_edit + y * fpip->max_w + fpip->w - (8 - shiftx);
+    ycp  = fpip->ycp_edit + y * fpip->max_w + fpip->w - (8 - shiftx);
     ycp2 = wsp + y * fpip->w + fpip->w - (8 - shiftx);
     for (x = fpip->w - (8 - shiftx); x < fpip->w; x++) {
       ycp2->y += ycp->y;
