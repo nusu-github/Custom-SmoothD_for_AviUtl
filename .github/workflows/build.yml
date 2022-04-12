@@ -88,7 +88,7 @@ jobs:
         working-directory: ${{env.GITHUB_WORKSPACE}}
         shell: msys2 {0}
         run: |
-          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }}
+          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_C_FLAGS="--rtlib=compiler-rt -unwindlib=libunwind" -DCMAKE_CXX_FLAGS="-stdlib=libc++"
           cmake --build build
 
       - name: Create archive
@@ -103,7 +103,7 @@ jobs:
           path: |
             msys2-clang_${{ matrix.build_configuration }}.zip
 
-  msvc:
+  msvc-cl:
     runs-on: windows-latest
 
     strategy:
@@ -131,11 +131,48 @@ jobs:
       - name: Create archive
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          7z a msvc_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
+          7z a msvc-cl_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: msvc
+          name: msvc-cl
           path: |
-            msvc_${{ matrix.build_configuration }}.zip
+            msvc-cl_${{ matrix.build_configuration }}.zip
+
+  msvc-clang:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        build_configuration: [Debug, Release]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup ninja
+        run: |
+          choco install ninja -y
+
+      - name: Enable Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1.10.0
+        with:
+          arch: win32
+
+      - name: Build
+        working-directory: ${{env.GITHUB_WORKSPACE}}
+        run: |
+          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          cmake --build build
+
+      - name: Create archive
+        working-directory: ${{env.GITHUB_WORKSPACE}}
+        run: |
+          7z a msvc-clang_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: msvc-clang
+          path: |
+            msvc-clang_${{ matrix.build_configuration }}.zip
