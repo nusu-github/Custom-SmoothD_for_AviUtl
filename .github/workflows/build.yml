@@ -1,16 +1,12 @@
 name: build
 
-on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
+on: [push, pull_request]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  msys2:
+  msys2-gcc:
     runs-on: windows-latest
 
     strategy:
@@ -40,14 +36,72 @@ jobs:
       - name: Create archive
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          7z a msys2_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
+          7z a msys2-gcc_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: msys2
+          name: msys2-gcc
           path: |
-            msys2_${{ matrix.build_configuration }}.zip
+            msys2-gcc_${{ matrix.build_configuration }}.zip
+
+  msys2-clang:
+    runs-on: windows-latest
+
+    env:
+      CC: clang
+      CXX: clang++
+
+    strategy:
+      matrix:
+        build_configuration: [Debug, Release]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: mingw32
+          pacboy: >-
+            clang:p
+            compiler-rt:p
+            llvm:p
+            crt-git:p
+            headers-git:p
+            libc++:p
+            libc++abi:p
+            libunwind:p
+            libmangle-git:p
+            libwinpthread-git:p
+            winpthreads-git:p
+            make:p
+            openmp:p
+            pkgconf:p
+            tools-git:p
+            winstorecompat-git:p
+            cmake:p
+            ninja:p
+
+      - name: Build
+        working-directory: ${{env.GITHUB_WORKSPACE}}
+        shell: msys2 {0}
+        run: |
+          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }}
+          cmake --build build
+
+      - name: Create archive
+        working-directory: ${{env.GITHUB_WORKSPACE}}
+        run: |
+          7z a msys2-clang_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: msys2-clang
+          path: |
+            msys2-clang_${{ matrix.build_configuration }}.zip
 
   msvc:
     runs-on: windows-latest
@@ -85,24 +139,3 @@ jobs:
           name: msvc
           path: |
             msvc_${{ matrix.build_configuration }}.zip
-
-  create_release:
-    name: Create release
-    needs: [msvc, msys2]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - uses: actions/download-artifact@v3
-        with:
-          path: artifacts
-
-      - uses: "marvinpinto/action-automatic-releases@latest"
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "latest"
-          prerelease: true
-          title: "Development Build"
-          files: |
-            artifacts/*/*.zip
