@@ -20,6 +20,7 @@ set_target_properties(Custom-SmoothDfA PROPERTIES SUFFIX ".auf")
 if(MIMALLOC)
     add_subdirectory(library/mimalloc)
     target_link_libraries(Custom-SmoothDfA PUBLIC mimalloc-static)
+    target_compile_definitions(Custom-SmoothDfA PRIVATE MIMALLOC)
 endif()
 
 # LTO enabled

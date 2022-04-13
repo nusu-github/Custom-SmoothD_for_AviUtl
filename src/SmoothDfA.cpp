@@ -61,7 +61,7 @@ AviUtlでは、速度と作者の趣味のため、直交変換にアダマール変換を使用しています。と
 #include "filter.h"
 #include "ht.cpp"
 
-#ifdef mimalloc
+#ifdef MIMALLOC
 #include "mimalloc-new-delete.h"
 #endif
 
