@@ -61,6 +61,10 @@ AviUtlでは、速度と作者の趣味のため、直交変換にアダマール変換を使用しています。と
 #include "filter.h"
 #include "ht.cpp"
 
+#ifdef mimalloc
+#include "mimalloc-new-delete.h"
+#endif
+
 /*
  *	以下のグローバル変数ですが。
  *	Aviutl内臓のマルチスレッド機能は二つの値しか関数で渡せないので、やむを得ずグローバル変数にしました。
@@ -203,9 +207,10 @@ auto func_proc(FILTER *fp, FILTER_PROC_INFO *fpip) -> BOOL {
   const int MT = get_multi_thread(fp);
 
   //マルチスレッド数だけ画像サイズのメモリを確保して0で埋める。
-  work_space = new PIXEL_YC[sizeof(PIXEL_YC) * pictur_size * MT];
+  const int mem_size = sizeof(PIXEL_YC) * pictur_size * MT;
+  work_space         = new PIXEL_YC[mem_size];
 #ifdef DEBUG
-  ZeroMemory(work_space, (sizeof(PIXEL_YC) * pictur_size * MT));
+  ZeroMemory(work_space, mem_size);
 #endif
 
   //"0"で埋めなくとも問題なく動作します。デフォルトコンストラクタが"0"ということ、なのでしょうか?
