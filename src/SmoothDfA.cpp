@@ -204,9 +204,10 @@ auto func_proc(FILTER *fp, FILTER_PROC_INFO *fpip) -> BOOL {
   const int MT = get_multi_thread(fp);
 
   //マルチスレッド数だけ画像サイズのメモリを確保して0で埋める。
-  work_space = new PIXEL_YC[sizeof(PIXEL_YC) * pictur_size * MT];
+  const int mem_size = sizeof(PIXEL_YC) * pictur_size * MT;
+  work_space         = new PIXEL_YC[mem_size];
 #ifdef DEBUG
-  ZeroMemory(work_space, (sizeof(PIXEL_YC) * pictur_size * MT));
+  ZeroMemory(work_space, mem_size);
 #endif
 
   //"0"で埋めなくとも問題なく動作します。デフォルトコンストラクタが"0"ということ、なのでしょうか?

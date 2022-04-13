@@ -15,6 +15,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: true
 
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
@@ -58,6 +61,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: true
 
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
@@ -112,6 +118,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: true
 
       - name: Setup ninja
         run: |
@@ -149,6 +158,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: true
 
       - name: Setup ninja
         run: |
@@ -162,7 +174,7 @@ jobs:
       - name: Build
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -T ClangCL
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -T ClangCL -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
           cmake --build build
 
       - name: Create archive
