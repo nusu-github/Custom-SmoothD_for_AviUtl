@@ -123,10 +123,6 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Setup ninja
-        run: |
-          choco install ninja -y
-
       - name: Enable Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1.10.0
         with:
@@ -135,7 +131,7 @@ jobs:
       - name: Build
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }}
+          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_MAKE_PROGRAM="C:\PROGRAM FILES\MICROSOFT VISUAL STUDIO\2022\ENTERPRISE\COMMON7\IDE\COMMONEXTENSIONS\MICROSOFT\CMAKE\Ninja\ninja.exe"
           cmake --build build
 
       - name: Create archive
@@ -164,10 +160,6 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Setup ninja
-        run: |
-          choco install ninja -y
-
       - name: Enable Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1.10.0
         with:
@@ -176,7 +168,7 @@ jobs:
       - name: Build
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DMIMALLOC=${{ matrix.mimalloc }}
+          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_C_COMPILER:FILEPATH="C:/PROGRAM FILES/MICROSOFT VISUAL STUDIO/2022/ENTERPRISE/VC/Tools/Llvm/x64/bin/clang.exe" -DCMAKE_CXX_COMPILER:FILEPATH="C:/PROGRAM FILES/MICROSOFT VISUAL STUDIO/2022/ENTERPRISE/VC/Tools/Llvm/x64/bin/clang++.exe" -DCMAKE_MAKE_PROGRAM="C:\PROGRAM FILES\MICROSOFT VISUAL STUDIO\2022\ENTERPRISE\COMMON7\IDE\COMMONEXTENSIONS\MICROSOFT\CMAKE\Ninja\ninja.exe" -DMIMALLOC=${{ matrix.mimalloc }}
           cmake --build build
 
       - name: Create archive

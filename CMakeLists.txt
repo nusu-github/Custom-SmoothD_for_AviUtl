@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 project(Custom-SmoothD_for_AviUtl)
 
 set_property(GLOBAL PROPERTY EXPORT_COMPILE_COMMANDS TRUE)
+string(TOLOWER ${CMAKE_BUILD_TYPE} build_type)
 
 # cmake tool
 include(CheckIPOSupported)
@@ -22,7 +23,7 @@ if(MIMALLOC)
 endif()
 
 # LTO enabled
-if(CMAKE_BUILD_TYPE STRLESS release)
+if(build_type STREQUAL release)
     check_ipo_supported(RESULT supported OUTPUT error)
     if(supported)
         message(STATUS "IPO / LTO enabled")
@@ -35,13 +36,13 @@ endif()
 # set build options
 target_compile_features(Custom-SmoothDfA PUBLIC PRIVATE cxx_std_11)
 
-if(CMAKE_BUILD_TYPE STRLESS Debug)
+if(build_type STREQUAL debug)
     target_compile_definitions(Custom-SmoothDfA PRIVATE DEBUG)
 endif()
 
 if(MSVC)
     target_compile_options(Custom-SmoothDfA PUBLIC /arch:AVX2)
-    if(CMAKE_BUILD_TYPE STRLESS Debug)
+    if(build_type STREQUAL debug)
         target_compile_options(Custom-SmoothDfA PUBLIC /Od)
     else()
         target_compile_options(Custom-SmoothDfA PUBLIC /O2 /fp:fast)
@@ -51,7 +52,7 @@ else()
     if(NOT WIN32)
         target_link_options(Custom-SmoothDfA PUBLIC -static -s -Wl,--enable-stdcall-fixup -Wl,-kill-at)
     endif()
-    if(CMAKE_BUILD_TYPE STRLESS Debug)
+    if(build_type STREQUAL debug)
         target_compile_options(Custom-SmoothDfA PUBLIC -g3)
     else()
         target_compile_options(Custom-SmoothDfA PUBLIC -Ofast)
