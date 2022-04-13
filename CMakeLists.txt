@@ -2,12 +2,18 @@ cmake_minimum_required(VERSION 3.9)
 project(Custom-SmoothD_for_AviUtl)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
+set(CMAKE_CXX_STANDARD 11)
+
+# Include Libraries
+add_subdirectory(library/mimalloc)
 
 include_directories(./include)
 add_library(Custom-SmoothDfA SHARED ./src/SmoothDfA.cpp ./src/idct_int32.c ./src/idct_clip_table.c ./src/SmoothDfA.def)
 set_target_properties(Custom-SmoothDfA PROPERTIES PREFIX "")
 set_target_properties(Custom-SmoothDfA PROPERTIES OUTPUT_NAME "Custom-SmoothDfA")
 set_target_properties(Custom-SmoothDfA PROPERTIES SUFFIX ".auf")
+
+target_link_libraries(Custom-SmoothDfA PUBLIC mimalloc-static)
 
 include(CheckIPOSupported)
 check_ipo_supported(RESULT supported OUTPUT error)

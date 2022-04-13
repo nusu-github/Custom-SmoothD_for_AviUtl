@@ -60,6 +60,7 @@ AviUtlでは、速度と作者の趣味のため、直交変換にアダマール変換を使用しています。と
 #include "dct_int32.c"
 #include "filter.h"
 #include "ht.cpp"
+#include "mimalloc-new-delete.h"
 
 /*
  *	以下のグローバル変数ですが。
