@@ -58,6 +58,7 @@ jobs:
     strategy:
       matrix:
         build_configuration: [Debug, Release]
+        mimalloc: [on, off]
 
     steps:
       - uses: actions/checkout@v3
@@ -94,20 +95,20 @@ jobs:
         working-directory: ${{env.GITHUB_WORKSPACE}}
         shell: msys2 {0}
         run: |
-          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_C_FLAGS="--rtlib=compiler-rt -unwindlib=libunwind" -DCMAKE_CXX_FLAGS="-stdlib=libc++"
+          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_C_FLAGS="--rtlib=compiler-rt -unwindlib=libunwind" -DCMAKE_CXX_FLAGS="-stdlib=libc++" -DMIMALLOC=${{ matrix.mimalloc }}
           cmake --build build
 
       - name: Create archive
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          7z a msys2-clang_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
+          7z a msys2-clang_${{ matrix.build_configuration }}_mimalloc-${{ matrix.mimalloc }}.zip build\Custom-SmoothDfA.auf README.md
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: msys2-clang
           path: |
-            msys2-clang_${{ matrix.build_configuration }}.zip
+            msys2-clang_${{ matrix.build_configuration }}_mimalloc-${{ matrix.mimalloc }}.zip
 
   msvc-cl:
     runs-on: windows-latest
@@ -155,6 +156,7 @@ jobs:
     strategy:
       matrix:
         build_configuration: [Debug, Release]
+        mimalloc: [on, off]
 
     steps:
       - uses: actions/checkout@v3
@@ -174,17 +176,17 @@ jobs:
       - name: Build
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -T ClangCL -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DMIMALLOC=${{ matrix.mimalloc }}
           cmake --build build
 
       - name: Create archive
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          7z a msvc-clang_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
+          7z a msvc-clang_${{ matrix.build_configuration }}_mimalloc-${{ matrix.mimalloc }}.zip build\Custom-SmoothDfA.auf README.md
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: msvc-clang
           path: |
-            msvc-clang_${{ matrix.build_configuration }}.zip
+            msvc-clang_${{ matrix.build_configuration }}_mimalloc-${{ matrix.mimalloc }}.zip
