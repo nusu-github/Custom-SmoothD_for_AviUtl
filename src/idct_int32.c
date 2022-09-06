@@ -5,6 +5,7 @@
 #include "idct_clip_table.h"
 
 #define IDCT_INT32_C
+
 #include "idct_int32.h"
 
 #define FIX_0_298631336 2446
@@ -23,30 +24,16 @@
 void __stdcall idct_int32(int *block) {
   int i;
 
-  int w0;
-  int w1;
-  int w2;
-  int w3;
-  int w4;
-  int w5;
-  int w6;
-  int w7;
-
-  int z1;
-  int z2;
-  int z3;
-  int z4;
-  int z5;
-
-  int *s;
-  int *d;
-  int *w;
+  int w0, w1, w2, w3, w4, w5, w6, w7;
+  int z1, z2, z3, z4, z5;
+  int *s, *d, *w;
 
   int work[64];
 
   s = block;
   w = work;
 
+#pragma omp simd
   for (i = 0; i < 8; i++) {
     if ((s[1] | s[2] | s[3] | s[4] | s[5] | s[6] | s[7]) == 0) {
       w[0] = w[1] = w[2] = w[3] = w[4] = w[5] = w[6] = w[7] = s[0] << 4;
@@ -114,12 +101,11 @@ void __stdcall idct_int32(int *block) {
   w = work;
   d = block;
 
+#pragma omp simd
   for (i = 0; i < 8; i++) {
-    if ((w[1 * 8] | w[2 * 8] | w[3 * 8] | w[4 * 8] | w[5 * 8] | w[6 * 8] |
-         w[7 * 8]) == 0) {
-      d[0 * 8] = d[1 * 8] = d[2 * 8] = d[3 * 8] = d[4 * 8] = d[5 * 8] =
-          d[6 * 8]                                         = d[7 * 8] =
-              idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w[0] + 64) >> 7)];
+    if ((w[1 * 8] | w[2 * 8] | w[3 * 8] | w[4 * 8] | w[5 * 8] | w[6 * 8] | w[7 * 8]) == 0) {
+      d[0 * 8] = d[1 * 8] = d[2 * 8] = d[3 * 8] = d[4 * 8] = d[5 * 8] = d[6 * 8] = d[7 * 8] =
+          idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w[0] + 64) >> 7)];
       w += 1;
       d += 1;
       continue;
@@ -168,24 +154,16 @@ void __stdcall idct_int32(int *block) {
     w2 += z2 + z3;
     w3 += z1 + z4;
 
-    d[0 * 8] =
-        idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w4 + w3 + 524288) >> 20)];
-    d[1 * 8] =
-        idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w5 + w2 + 524288) >> 20)];
-    d[2 * 8] =
-        idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w6 + w1 + 524288) >> 20)];
-    d[3 * 8] =
-        idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w7 + w0 + 524288) >> 20)];
-    d[4 * 8] =
-        idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w7 - w0 + 524288) >> 20)];
-    d[5 * 8] =
-        idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w6 - w1 + 524288) >> 20)];
-    d[6 * 8] =
-        idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w5 - w2 + 524288) >> 20)];
-    d[7 * 8] =
-        idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w4 - w3 + 524288) >> 20)];
+    d[0 * 8] = idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w4 + w3 + 524288) >> 20)];
+    d[1 * 8] = idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w5 + w2 + 524288) >> 20)];
+    d[2 * 8] = idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w6 + w1 + 524288) >> 20)];
+    d[3 * 8] = idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w7 + w0 + 524288) >> 20)];
+    d[4 * 8] = idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w7 - w0 + 524288) >> 20)];
+    d[5 * 8] = idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w6 - w1 + 524288) >> 20)];
+    d[6 * 8] = idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w5 - w2 + 524288) >> 20)];
+    d[7 * 8] = idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w4 - w3 + 524288) >> 20)];
 
-    w += 1;
-    d += 1;
+    w++;
+    d++;
   }
 }

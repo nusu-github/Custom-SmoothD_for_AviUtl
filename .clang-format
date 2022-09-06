@@ -1,5 +1,8 @@
 BasedOnStyle: LLVM
-AlignConsecutiveAssignments: Consecutive
-AlignConsecutiveDeclarations: Consecutive
+AlignConsecutiveAssignments: AcrossEmptyLines
 AlignTrailingComments: true
+ColumnLimit: 120
+DeriveLineEnding: true
+Language: Cpp
 Standard: Auto
+UseCRLF: false
