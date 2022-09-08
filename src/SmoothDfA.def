@@ -2,4 +2,3 @@ LIBRARY Custom-SmoothDfA.auf
 
 EXPORTS
 	GetFilterTable @1
-

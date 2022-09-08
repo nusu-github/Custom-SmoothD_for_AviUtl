@@ -54,7 +54,10 @@ AviUtlでは、速度と作者の趣味のため、直交変換にアダマール変換を使用しています。と
 ・ソースの整理。12ビット→8ビットの処理をマルチスレッドに。
 */
 
-#include <cmath>
+#include <limits>
+#include <numbers>
+#include <type_traits>
+#include <valarray>
 
 #include "aviutl.hpp"
 
@@ -79,9 +82,9 @@ constexpr int shift[] = {
 AviUtl::PixelYC *work_space;
 
 // スレッド数
-int MT    = 1;
+int MT            = 1;
 
-int count = 0;
+int n_shift_count = 0;
 
 //---------------------------------------------------------------------
 //  フィルタ構造体定義
@@ -116,7 +119,7 @@ AviUtl::FilterPluginDLL filter{
 //---------------------------------------------------------------------
 //  フィルタ構造体のポインタを渡す関数
 //---------------------------------------------------------------------
-auto __stdcall GetFilterTable() { return &filter; }
+extern "C" AviUtl::FilterPluginDLL __declspec(dllexport) * GetFilterTable(void) { return &filter; }
 
 //---------------------------------------------------------------------
 //  初期化関数
@@ -140,7 +143,7 @@ auto func_update(AviUtl::FilterPlugin *fp, AviUtl::FilterPluginDLL::UpdateStatus
   smoothdfa.rounding_on      = static_cast<bool>(fp->check[0]); // 8bitにする時に四捨五入するかどうか
   smoothdfa.all_quantization = static_cast<bool>(fp->check[1]); // 全て量子化するかどうか
   smoothdfa.dct_on           = static_cast<bool>(fp->check[2]); // 茂木氏作のDCT-iDCTを使用するかどうか
-  count                      = smoothdfa.zero_weight + (MT * (smoothdfa.n_shift / MT));
+  n_shift_count              = smoothdfa.zero_weight + (MT * (smoothdfa.n_shift / MT));
   return TRUE;
 }
 
@@ -157,9 +160,10 @@ auto func_proc(AviUtl::FilterPlugin *fp, AviUtl::FilterProcInfo *fpip) -> BOOL {
 
   // マルチスレッド数だけ画像サイズのメモリを確保して0で埋める。
   const int mem_size = sizeof(AviUtl::PixelYC) * pictur_size * MT;
-  work_space         = new AviUtl::PixelYC[mem_size];
+  work_space         = new AviUtl::PixelYC[mem_size]{};
 
-  shift_data(fpip);
+  // 画素データを8ビット化する。マルチスレッドにしてみました。
+  fp->exfunc->exec_multi_thread_func(shift_data, static_cast<void *>(fpip), nullptr);
 
   /*
   以下でぼかした画像を作業領域に加算する処理を繰り返す
@@ -187,45 +191,46 @@ auto func_proc(AviUtl::FilterPlugin *fp, AviUtl::FilterProcInfo *fpip) -> BOOL {
         ycp2 += pictur_size;
       }
 
-      ycp->y  = ((ycp->y * zero_weight + temp.y) << 4) / count;
-      ycp->cb = ((ycp->cb * zero_weight + temp.cb) << 4) / count;
-      ycp->cr = ((ycp->cr * zero_weight + temp.cr) << 4) / count;
+      ycp->y  = ((ycp->y * zero_weight + temp.y) << 4) / n_shift_count;
+      ycp->cb = ((ycp->cb * zero_weight + temp.cb) << 4) / n_shift_count;
+      ycp->cr = ((ycp->cr * zero_weight + temp.cr) << 4) / n_shift_count;
       ycp++;
       wsp++;
     }
   }
 
   delete[] work_space;
-
   return TRUE;
 }
+
 //---------------------------------------------------------------------
 //  画素データ8ビット化関数
 //---------------------------------------------------------------------
-void shift_data(AviUtl::FilterProcInfo *fpip) {
+void shift_data(int thread_id, int thread_num, void *param1, void * /*param2*/) {
+  // マルチスレッド対応サンプルフィルタの方法そのままでマルチスレッド処理をしています
+  auto *fpip             = static_cast<AviUtl::FilterProcInfo *>(param1);
+
   const bool rounding_on = smoothdfa.rounding_on;
+  //	スレッド毎の画像を処理する場所を計算する
+  int y_start = fpip->h * thread_id / thread_num;
+  int y_end   = fpip->h * (thread_id + 1) / thread_num;
 
   /*
-   * 12ビットは一般的でないことと、加算していくと飽和してしまうかもしれないので、画素データのビット数を落とす。
-   * 輝度と色差、どちらも8ビットに。
+   *	12ビットは一般的でないことと、加算していくと飽和してしまうかもしれないので、画素データのビット数を落とす。
+   *	輝度と色差、どちらも8ビットに。
    */
-
-  auto *ycp = reinterpret_cast<AviUtl::PixelYC *>(fpip->ycp_edit);
-
-  if (rounding_on) {
-#pragma omp simd
-    for (int i = 0; i < (fpip->max_h * fpip->max_w); i++) {
-      ycp->y  = (ycp->y * 100 / 16 + 45) / 100;
-      ycp->cb = (ycp->cb > 0) ? (ycp->cb * 100 / 16 + 45) / 100 : (ycp->cb * 100 / 16 - 45) / 100;
-      ycp->cr = (ycp->cr > 0) ? (ycp->cr * 100 / 16 + 45) / 100 : (ycp->cr * 100 / 16 - 45) / 100;
-      ycp++;
-    }
-  } else {
-#pragma omp simd
-    for (int i = 0; i < (fpip->max_h * fpip->max_w); i++) {
-      ycp->y >>= 4;
-      ycp->cb >>= 4;
-      ycp->cr >>= 4;
+  for (int y = y_start; y < y_end; y++) {
+    auto *ycp = reinterpret_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + y * fpip->max_w;
+    for (int x = 0; x < fpip->w; x++) {
+      if (rounding_on) {
+        ycp->y  = (ycp->y * 100 / 16 + 45) / 100;
+        ycp->cb = (ycp->cb > 0) ? (ycp->cb * 100 / 16 + 45) / 100 : (ycp->cb * 100 / 16 - 45) / 100;
+        ycp->cr = (ycp->cr > 0) ? (ycp->cr * 100 / 16 + 45) / 100 : (ycp->cr * 100 / 16 - 45) / 100;
+      } else {
+        ycp->y >>= 4;
+        ycp->cb >>= 4;
+        ycp->cr >>= 4;
+      }
       ycp++;
     }
   }
@@ -242,7 +247,6 @@ void Loop(int thread_id, int /*thread_num*/, void *param1, void *param2) {
   const bool all_quantization = smoothdfa.all_quantization;
   const bool dct_on           = smoothdfa.dct_on;
 
-  int x, y;
   AviUtl::PixelYC *ycp;
 
   /*
@@ -263,9 +267,9 @@ void Loop(int thread_id, int /*thread_num*/, void *param1, void *param2) {
   for (int yblock = shifty; yblock < h; yblock += 8) {
     for (int xblock = shiftx; xblock < w; xblock += 8) {
       // 8*8のブロックに画像を代入する
-      for (y = 0; y < 8; y++) {
+      for (int y = 0; y < 8; y++) {
         ycp = reinterpret_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + (y + yblock) * fpip->max_w + xblock;
-        for (x = 0; x < 8; x++) {
+        for (int x = 0; x < 8; x++) {
           block[x + y * 8]   = ycp->y;
           blockCb[x + y * 8] = ycp->cb;
           blockCr[x + y * 8] = ycp->cr;
@@ -288,22 +292,15 @@ void Loop(int thread_id, int /*thread_num*/, void *param1, void *param2) {
         fwht(blockCr); // アダマール変換
       }
 
-#pragma omp simd
       for (int i = 1; i < 64; i++) {
         if (all_quantization) {
-          if (abs(block[i]) < threshold)
-            block[i] = (block[i] / quantization) * quantization;
-          if (abs(blockCb[i]) < threshold)
-            blockCb[i] = (blockCb[i] / quantization) * quantization;
-          if (abs(blockCr[i]) < threshold)
-            blockCr[i] = (blockCr[i] / quantization) * quantization;
+          block[i]   = (std::abs(block[i]) < threshold) ? (block[i] / quantization) * quantization : block[i];
+          blockCb[i] = (std::abs(blockCb[i]) < threshold) ? (blockCb[i] / quantization) * quantization : blockCb[i];
+          blockCr[i] = (std::abs(blockCr[i]) < threshold) ? (blockCr[i] / quantization) * quantization : blockCr[i];
         } else {
-          if (abs(block[i]) < threshold)
-            block[i] = block[i] / quantization * quantization;
-          if (abs(blockCb[i]) < threshold)
-            blockCb[i] = 0;
-          if (abs(blockCr[i]) < threshold)
-            blockCr[i] = 0;
+          block[i]   = (std::abs(block[i]) < threshold) ? (block[i] / quantization) * quantization : block[i];
+          blockCb[i] = (std::abs(blockCb[i]) < threshold) ? 0 : blockCb[i];
+          blockCr[i] = (std::abs(blockCr[i]) < threshold) ? 0 : blockCr[i];
         }
       }
 
@@ -319,9 +316,9 @@ void Loop(int thread_id, int /*thread_num*/, void *param1, void *param2) {
 
       // 直接テンポラリ領域に書き込むと画像にゴミが出るため、一度work_spaceにぼかしたブロックを代入する。
       // おそらくマルチスレッドで同時に同じメモリの場所に書き込むことからの不具合と思われます。
-      for (y = 0; y < 8; y++) {
+      for (int y = 0; y < 8; y++) {
         ycp = work_space + (y + yblock) * fpip->w + xblock + fpip->w * fpip->h * thread_id;
-        for (x = 0; x < 8; x++) {
+        for (int x = 0; x < 8; x++) {
           ycp->y += block[x + y * 8];
           ycp->cb += blockCb[x + y * 8];
           ycp->cr += blockCr[x + y * 8];
@@ -365,14 +362,12 @@ auto get_multi_thread(AviUtl::FilterPlugin *fp) -> int {
 */
 void copy_pix(AviUtl::FilterProcInfo *fpip, AviUtl::PixelYC *wsp, int shiftx, int shifty) {
 
-  int x, y;
-
   AviUtl::PixelYC *ycp, *ycp2;
 
-  for (y = 0; y < shifty; y++) {
+  for (int y = 0; y < shifty; y++) {
     ycp  = reinterpret_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + y * fpip->max_w;
     ycp2 = wsp + y * fpip->w;
-    for (x = 0; x < fpip->w; x++) {
+    for (int x = 0; x < fpip->w; x++) {
       ycp2->y += ycp->y;
       ycp2->cb += ycp->cb;
       ycp2->cr += ycp->cr;
@@ -381,10 +376,10 @@ void copy_pix(AviUtl::FilterProcInfo *fpip, AviUtl::PixelYC *wsp, int shiftx, in
     }
   }
 
-  for (y = fpip->h - (8 - shifty); y < fpip->h; y++) {
+  for (int y = fpip->h - (8 - shifty); y < fpip->h; y++) {
     ycp  = reinterpret_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + y * fpip->max_w;
     ycp2 = wsp + y * fpip->w;
-    for (x = 0; x < fpip->w; x++) {
+    for (int x = 0; x < fpip->w; x++) {
       ycp2->y += ycp->y;
       ycp2->cb += ycp->cb;
       ycp2->cr += ycp->cr;
@@ -393,10 +388,10 @@ void copy_pix(AviUtl::FilterProcInfo *fpip, AviUtl::PixelYC *wsp, int shiftx, in
     }
   }
 
-  for (y = shifty; y < fpip->h - (8 - shifty); y++) {
+  for (int y = shifty; y < fpip->h - (8 - shifty); y++) {
     ycp  = reinterpret_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + y * fpip->max_w;
     ycp2 = wsp + y * fpip->w;
-    for (x = 0; x < shiftx; x++) {
+    for (int x = 0; x < shiftx; x++) {
       ycp2->y += ycp->y;
       ycp2->cb += ycp->cb;
       ycp2->cr += ycp->cr;
@@ -405,10 +400,10 @@ void copy_pix(AviUtl::FilterProcInfo *fpip, AviUtl::PixelYC *wsp, int shiftx, in
     }
   }
 
-  for (y = shifty; y < fpip->h - (8 - shifty); y++) {
+  for (int y = shifty; y < fpip->h - (8 - shifty); y++) {
     ycp  = reinterpret_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + y * fpip->max_w + fpip->w - (8 - shiftx);
     ycp2 = wsp + y * fpip->w + fpip->w - (8 - shiftx);
-    for (x = fpip->w - (8 - shiftx); x < fpip->w; x++) {
+    for (int x = fpip->w - (8 - shiftx); x < fpip->w; x++) {
       ycp2->y += ycp->y;
       ycp2->cb += ycp->cb;
       ycp2->cr += ycp->cr;

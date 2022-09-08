@@ -11,7 +11,6 @@
 //		二次元高速ウォルシュ-アダマール変換関数
 //---------------------------------------------------------------------
 void fwht(int *source) {
-  int i;
 
   // 配列を使用しないほうが処理が早かったです。
   // Cでは当然なのでしょうか?
@@ -20,8 +19,7 @@ void fwht(int *source) {
 
   int *p = source;
 
-#pragma omp simd
-  for (i = 0; i < 8; i++) {
+  for (int i = 0; i < 8; i++) {
     a0   = p[0] + p[1];
     a1   = p[0] - p[1];
     a2   = p[2] + p[3];
@@ -53,8 +51,7 @@ void fwht(int *source) {
   }
   p = source;
 
-#pragma omp simd
-  for (i = 0; i < 8; i++) {
+  for (int i = 0; i < 8; i++) {
     a0    = p[0] + p[8];
     a1    = p[0] - p[8];
     a2    = p[16] + p[24];

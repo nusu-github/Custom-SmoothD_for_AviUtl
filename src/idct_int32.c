@@ -22,7 +22,6 @@
 #define FIX_3_072711026 25171
 
 void __stdcall idct_int32(int *block) {
-  int i;
 
   int w0, w1, w2, w3, w4, w5, w6, w7;
   int z1, z2, z3, z4, z5;
@@ -33,8 +32,7 @@ void __stdcall idct_int32(int *block) {
   s = block;
   w = work;
 
-#pragma omp simd
-  for (i = 0; i < 8; i++) {
+  for (int i = 0; i < 8; i++) {
     if ((s[1] | s[2] | s[3] | s[4] | s[5] | s[6] | s[7]) == 0) {
       w[0] = w[1] = w[2] = w[3] = w[4] = w[5] = w[6] = w[7] = s[0] << 4;
       s += 8;
@@ -101,8 +99,7 @@ void __stdcall idct_int32(int *block) {
   w = work;
   d = block;
 
-#pragma omp simd
-  for (i = 0; i < 8; i++) {
+  for (int i = 0; i < 8; i++) {
     if ((w[1 * 8] | w[2 * 8] | w[3 * 8] | w[4 * 8] | w[5 * 8] | w[6 * 8] | w[7 * 8]) == 0) {
       d[0 * 8] = d[1 * 8] = d[2 * 8] = d[3 * 8] = d[4 * 8] = d[5 * 8] = d[6 * 8] = d[7 * 8] =
           idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w[0] + 64) >> 7)];

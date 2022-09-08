@@ -20,7 +20,6 @@
 #define FIX_3_072711026 25171
 
 void __stdcall dct_int32(int *block) {
-  int i;
 
   int w0, w1, w2, w3, w4, w5, w6, w7;
   int w10, w11, w12, w13;
@@ -29,8 +28,7 @@ void __stdcall dct_int32(int *block) {
   int *s = block;
   int *w = block;
 
-#pragma omp simd
-  for (i = 0; i < 8; i++) {
+  for (int i = 0; i < 8; i++) {
     /* row DCT */
     w0   = s[0] + s[7];
     w7   = s[0] - s[7];
@@ -82,8 +80,7 @@ void __stdcall dct_int32(int *block) {
   w      = block;
   int *d = block;
 
-#pragma omp simd
-  for (i = 0; i < 8; i++) {
+  for (int i = 0; i < 8; i++) {
     /* col DCT */
     w0       = w[8 * 0] + w[8 * 7];
     w7       = w[8 * 0] - w[8 * 7];

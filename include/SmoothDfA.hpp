@@ -15,13 +15,7 @@ struct smoothdfa_struct {
   bool dct_on{};           // 離散コサイン変換を使うか
 };
 
-struct Soa_PixelYC {
-  int16_t *y;
-  int16_t *cb;
-  int16_t *cr;
-};
-
-void shift_data(AviUtl::FilterProcInfo *fpip);
+void shift_data(int thread_id, int thread_num, void *param1, void * /*param2*/);
 void Loop(int thread_id, int thread_num, void *param1, void *param2);
 auto get_multi_thread(AviUtl::FilterPlugin *fp) -> int;
 void copy_pix(AviUtl::FilterProcInfo *fpip, AviUtl::PixelYC *wsp, int shiftx, int shifty);
