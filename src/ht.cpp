@@ -7,19 +7,23 @@
 この方が高速かな、と
 */
 
+#include <cstdint>
+
 //---------------------------------------------------------------------
 //		二次元高速ウォルシュ-アダマール変換関数
 //---------------------------------------------------------------------
-void fwht(int *source) {
+#pragma omp declare simd uniform(source) inbranch
+void fwht(int_fast32_t &source) {
 
   // 配列を使用しないほうが処理が早かったです。
   // Cでは当然なのでしょうか?
-  int a0, a1, a2, a3, a4, a5, a6, a7;
-  int b0, b1, b2, b3, b4, b5, b6, b7;
+  int_fast32_t a0, a1, a2, a3, a4, a5, a6, a7;
+  int_fast32_t b0, b1, b2, b3, b4, b5, b6, b7;
 
-  int *p = source;
+  int_fast32_t *p = &source;
 
-  for (int i = 0; i < 8; i++) {
+#pragma omp simd
+  for (int_fast16_t i = 0; i < 8; i++) {
     a0   = p[0] + p[1];
     a1   = p[0] - p[1];
     a2   = p[2] + p[3];
@@ -49,9 +53,10 @@ void fwht(int *source) {
 
     p += 8;
   }
-  p = source;
+  p = &source;
 
-  for (int i = 0; i < 8; i++) {
+#pragma omp simd
+  for (int_fast16_t i = 0; i < 8; i++) {
     a0    = p[0] + p[8];
     a1    = p[0] - p[8];
     a2    = p[16] + p[24];

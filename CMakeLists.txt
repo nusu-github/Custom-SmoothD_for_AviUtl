@@ -1,10 +1,10 @@
-cmake_minimum_required(VERSION 3.23)
-project(Custom-SmoothD_for_AviUtl)
+cmake_minimum_required(VERSION 3.23.2)
 
-set(CMAKE_CXX_STANDARD 20)
-
-# cmake tool
-include(CheckIPOSupported)
+project(
+        Custom-SmoothD_for_AviUtl
+        VERSION 0.01.1
+        LANGUAGES CXX C
+)
 
 # in-source build error
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
@@ -13,127 +13,167 @@ if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
     You may need to remove CMakeCache.txt.")
 endif ()
 
-# set source files
-add_library(Custom-SmoothDfA SHARED ./src/SmoothDfA.cpp ./src/ht.cpp ./src/dct_int32.c ./src/idct_clip_table.c ./src/idct_int32.c ./src/SmoothDfA.def)
-target_include_directories(Custom-SmoothDfA PUBLIC "./include")
-target_include_directories(Custom-SmoothDfA PUBLIC "./include/aviutl_exedit_sdk")
+# Option list
+## compile option
+option(ENABLE_LTO "Enable LTO" OFF)
+## library option
+option(ENABLE_MIMALLOC "Enable mimalloc" OFF)
 
-# set output file name
+
+# cmake tool
+include(CheckIPOSupported)
+include(FetchContent)
+
+# Library list
+## aviutl_exedit_sdk
+FetchContent_Declare(
+        aviutl_exedit_sdk
+        GIT_REPOSITORY "https://github.com/ePi5131/aviutl_exedit_sdk"
+        GIT_SHALLOW true
+        GIT_PROGRESS true
+)
+FetchContent_MakeAvailable(aviutl_exedit_sdk)
+
+# Project settings
+## Set source files
+add_library(Custom-SmoothDfA SHARED ./src/SmoothDfA.cpp ./src/ht.cpp src/dct_int32.cpp src/idct_int32.cpp ./src/SmoothDfA.def)
+
+## Set include directories
+target_include_directories(Custom-SmoothDfA PRIVATE ./include)
+### aviutl_exedit_sdk
+target_include_directories(Custom-SmoothDfA PRIVATE ${aviutl_exedit_sdk_SOURCE_DIR})
+
+## C++ standard
+target_compile_features(Custom-SmoothDfA PRIVATE cxx_std_20)
+
+## set output file name
 set_target_properties(Custom-SmoothDfA PROPERTIES PREFIX "")
-set_target_properties(Custom-SmoothDfA PROPERTIES OUTPUT_NAME "Custom-SmoothDfA")
+### Release or Debug
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    set_target_properties(Custom-SmoothDfA PROPERTIES OUTPUT_NAME "Custom-SmoothDfA")
+else ()
+    set_target_properties(Custom-SmoothDfA PROPERTIES OUTPUT_NAME "Custom-SmoothDfA_D")
+endif ()
 set_target_properties(Custom-SmoothDfA PROPERTIES SUFFIX ".auf")
 
-# LTO enabled
-if (ENABLE_LTO)
-    check_ipo_supported(RESULT result OUTPUT output)
-    if (result)
-        message(STATUS "IPO / LTO enabled")
-        set_property(GLOBAL PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-        if (MSVC)
-            target_compile_options(Custom-SmoothDfA PRIVATE /GL /Gw)
-            target_link_options(Custom-SmoothDfA PRIVATE /OPT:REF,ICF)
-        endif ()
-    else ()
-        if (MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "Intel")
-            message(STATUS "IPO / LTO enabled")
-            target_link_options(Custom-SmoothDfA PRIVATE /Qipo)
+### OpenMP
+find_package(OpenMP)
+if (OpenMP_CXX_FOUND)
+    message(STATUS "OpenMP found")
+    message(STATUS "OpenMP_CXX_VERSION: ${OpenMP_CXX_VERSION}")
+    if (OpenMP_CXX_VERSION VERSION_LESS 4.5)
+        if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+            target_compile_options(Custom-SmoothDfA PRIVATE -openmp:experimental)
+            message(WARNING
+                    "OpenMP4.0 in the MSVC compiler is an experimental feature. It may fail to compile.
+                    Please use the Clang compiler.")
         else ()
-            message(WARNING "LTO is not supported: ${output}")
-        endif ()
-    endif ()
-endif ()
-
-# PGO enabled
-if (PGO_USE OR PGO_2PASS_USE)
-    if (PGO_2PASS_USE)
-        file(COPY 2pass_code.profdata DESTINATION ${CMAKE_BINARY_DIR})
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-use=2pass_code.profdata")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-use=2pass_code.profdata")
-    else ()
-        file(COPY code.profdata DESTINATION ${CMAKE_BINARY_DIR})
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-use=code.profdata")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-use=code.profdata")
-    endif ()
-    message(STATUS "PGO use enabled")
-endif ()
-
-if (PGO_GENERATE OR PGO_2PASS_GENERATE)
-    if (PGO_2PASS_GENERATE)
-        if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fcs-profile-generate=2pass_code-%m.profraw")
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcs-profile-generate=2pass_code-%m.profraw")
-        else ()
-            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-generate=2pass_code-%m.profraw")
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-generate=2pass_code-%m.profraw")
+            message(FATAL_ERROR "OpenMP version is too old. Please update your compiler.")
         endif ()
     else ()
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-generate=code-%m.profraw")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-generate=code-%m.profraw")
-    endif ()
-    message(STATUS "PGO generation enabled")
-endif ()
-
-
-# set build options
-if (MSVC)
-    target_compile_options(Custom-SmoothDfA PUBLIC /arch:AVX2)
-
-    if (CMAKE_BUILD_TYPE MATCHES "Debug")
-        taget_compile_options(Custom-SmoothDfA PUBLIC /Od /ZI /DEBUG)
-    else ()
-        target_compile_options(Custom-SmoothDfA PUBLIC /O2)
-    endif ()
-
-    if (MAX_OPTIMIZE)
-        target_compile_options(Custom-SmoothDfA PUBLIC /fp:fast /Ob3)
-    endif ()
-
-    if (CMAKE_CXX_COMPILER_ID MATCHES "Intel")
-        message(STATUS "MSVC-like Intel C++ Compiler detected")
-
-        target_compile_options(Custom-SmoothDfA PUBLIC /Qvec /Qopt-report:3)
-        target_link_options(Custom-SmoothDfA PUBLIC /Quse-intel-optimized-headers /Qno-intel-lib)
-
-        if (NATIVE)
-            target_compile_options(Custom-SmoothDfA PUBLIC /QxHost)
-        endif ()
-
-    endif ()
-
-    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        message(STATUS "MSVC-like Clang detected")
-
-        if (NATIVE)
-            target_compile_options(Custom-SmoothDfA PUBLIC /clang:-march=native /clang:-mtune=native)
-        else ()
-            target_compile_options(Custom-SmoothDfA PUBLIC /clang:-march=x86-64-v3 /clang:-mtune=x86-64)
-        endif ()
-
-        if (MAX_OPTIMIZE)
-            target_compile_options(Custom-SmoothDfA PUBLIC /clang:-ffast-math)
-        endif ()
-
+        target_link_libraries(Custom-SmoothDfA PUBLIC OpenMP::OpenMP_CXX)
     endif ()
 else ()
-    if (STATIC)
-        target_link_options(Custom-SmoothDfA PUBLIC -static)
-    endif ()
+    message(FATAL_ERROR "OpenMP not found. Please install OpenMP Library.")
+endif ()
 
-    if (NATIVE)
-        target_compile_options(Custom-SmoothDfA PUBLIC -march=native -mtune=native)
-    else ()
-        target_compile_options(Custom-SmoothDfA PUBLIC -march=x86-64-v3 -mtune=generic)
-    endif ()
-
-    if (CMAKE_BUILD_TYPE MATCHES "Debug")
-        message(STATUS "Debug build")
-        target_compile_options(Custom-SmoothDfA PUBLIC -O0 -g3 -ggdb)
-    else ()
-        message(STATUS "Release build")
-        if (MAX_OPTIMIZE)
-            target_link_options(Custom-SmoothDfA PUBLIC -Ofast)
+### LTO
+check_ipo_supported(RESULT LTO_SUPPORTED OUTPUT LTO_OUTPUT)
+if (LTO_SUPPORTED)
+    message(STATUS "LTO is supported")
+    if (ENABLE_LTO)
+        message(STATUS "LTO is enabled")
+        if (CMAKE_BUILD_TYPE STREQUAL "Release")
+            set_target_properties(Custom-SmoothDfA PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+            if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+                target_compile_options(Custom-SmoothDfA PRIVATE /GL)
+                target_link_options(Custom-SmoothDfA PRIVATE /LTCG)
+            endif ()
         else ()
-            target_link_options(Custom-SmoothDfA PUBLIC -O3 -ffast-math)
+            message(WARNING "LTO is enabled but CMAKE_BUILD_TYPE is not Release")
+            set(ENABLE_LTO OFF)
         endif ()
     endif ()
+else ()
+    if (ENABLE_LTO)
+        message(WARNING "LTO is enabled but not supported")
+        set(ENABLE_LTO OFF)
+    endif ()
+endif ()
+
+if (MSVC)
+    # Compile detection
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+        message(STATUS "Compiler is MSVC-Like IntelLLVM")
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        message(STATUS "Compiler is MSVC-Like Clang")
+        message(FATAL_ERROR "Do not use MSVC-like Clang(clang-cl).")
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+        message(STATUS "Compiler is MSVC-Like MSVC")
+    else ()
+        message(WARNING "Compiler is MSVC-Like but not IntelLLVM, Clang, MSVC")
+    endif ()
+
+    target_link_options(Custom-SmoothDfA PRIVATE /LARGEADDRESSAWARE)
+
+    # Release
+    if (CMAKE_BUILD_TYPE STREQUAL "Release")
+
+        target_compile_options(Custom-SmoothDfA PRIVATE /GF /Gw /Gy /J)
+        target_link_options(Custom-SmoothDfA PRIVATE /OPT:REF,ICF,LBR /INCREMENTAL:NO)
+
+        if (OPTIMIZE_FOR_SIZE)
+            message(STATUS "Optimize for size")
+            target_compile_options(Custom-SmoothDfA PRIVATE /Os)
+        else ()
+            message(STATUS "Optimize for speed")
+            target_compile_options(Custom-SmoothDfA PRIVATE /Ot)
+        endif ()
+    else ()
+    endif ()
+
+    target_compile_options(Custom-SmoothDfA PRIVATE /fp:fast)
+
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+
+        if (SAVE_TEMPS)
+            target_compile_options(Custom-SmoothDfA PRIVATE /Qsave-temps)
+        endif ()
+
+        if (NATIVE)
+            target_compile_options(Custom-SmoothDfA PRIVATE /QxHost)
+        else ()
+            target_compile_options(Custom-SmoothDfA PRIVATE /QxAVX2)
+        endif ()
+
+        target_compile_options(Custom-SmoothDfA PRIVATE /Qopt-report:2)
+        target_compile_options(Custom-SmoothDfA PRIVATE /Qvec /Qopt-multiple-gather-scatter-by-shuffles /Qopt-dynamic-align)
+
+    else ()
+
+        target_compile_options(Custom-SmoothDfA PRIVATE -arch:AVX2)
+
+        target_compile_options(Custom-SmoothDfA PRIVATE -Qvec-report:2)
+
+    endif ()
+
+else ()
+    # Compile detection
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+        message(STATUS "Compiler is IntelLLVM")
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        message(STATUS "Compiler is Clang")
+    else ()
+        message(STATUS "Compiler is GCC")
+    endif ()
+
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(Custom-SmoothDfA PRIVATE -march=x86-64-v3)
+    else ()
+        target_compile_options(Custom-SmoothDfA PRIVATE -march=x86-64-v3)
+    endif ()
+
+    # static link
+    target_link_options(Custom-SmoothDfA PRIVATE -s -static -save-temps)
+
 endif ()

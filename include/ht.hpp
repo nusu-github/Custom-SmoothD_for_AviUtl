@@ -1,3 +1,5 @@
 #pragma once
 
-void fwht(int *source);
+#include <cstdint>
+
+void fwht(int_fast32_t &source);

@@ -2,37 +2,37 @@
   IDCT module used LLM algorithm (based IJG idct_int.c)
  *******************************************************************/
 
-#include "idct_clip_table.h"
+#include "idct_clip_table.hpp"
 
-#define IDCT_INT32_C
+enum {
+  FIX_0_298631336 = 2446,
+  FIX_0_390180644 = 3196,
+  FIX_0_541196100 = 4433,
+  FIX_0_765366865 = 6270,
+  FIX_0_899976223 = 7373,
+  FIX_1_175875602 = 9633,
+  FIX_1_501321110 = 12299,
+  FIX_1_847759065 = 15137,
+  FIX_1_961570560 = 16069,
+  FIX_2_053119869 = 16819,
+  FIX_2_562915447 = 20995,
+  FIX_3_072711026 = 25172
+};
 
-#include "idct_int32.h"
+#pragma omp declare simd uniform(block) inbranch
+void idct_int32(int_fast32_t &block) {
 
-#define FIX_0_298631336 2446
-#define FIX_0_390180644 3196
-#define FIX_0_541196100 4433
-#define FIX_0_765366865 6269
-#define FIX_0_899976223 7372
-#define FIX_1_175875602 9632
-#define FIX_1_501321110 12298
-#define FIX_1_847759065 15136
-#define FIX_1_961570560 16069
-#define FIX_2_053119869 16819
-#define FIX_2_562915447 20995
-#define FIX_3_072711026 25171
+  int_fast32_t w0, w1, w2, w3, w4, w5, w6, w7;
+  int_fast32_t z1, z2, z3, z4, z5;
+  int_fast32_t *s, *d, *w;
 
-void __stdcall idct_int32(int *block) {
+  int_fast32_t work[64]{};
 
-  int w0, w1, w2, w3, w4, w5, w6, w7;
-  int z1, z2, z3, z4, z5;
-  int *s, *d, *w;
-
-  int work[64];
-
-  s = block;
+  s = &block;
   w = work;
 
-  for (int i = 0; i < 8; i++) {
+#pragma omp simd
+  for (int_fast16_t i = 0; i < 8; i++) {
     if ((s[1] | s[2] | s[3] | s[4] | s[5] | s[6] | s[7]) == 0) {
       w[0] = w[1] = w[2] = w[3] = w[4] = w[5] = w[6] = w[7] = s[0] << 4;
       s += 8;
@@ -97,9 +97,10 @@ void __stdcall idct_int32(int *block) {
   }
 
   w = work;
-  d = block;
+  d = &block;
 
-  for (int i = 0; i < 8; i++) {
+#pragma omp simd
+  for (int_fast16_t i = 0; i < 8; i++) {
     if ((w[1 * 8] | w[2 * 8] | w[3 * 8] | w[4 * 8] | w[5 * 8] | w[6 * 8] | w[7 * 8]) == 0) {
       d[0 * 8] = d[1 * 8] = d[2 * 8] = d[3 * 8] = d[4 * 8] = d[5 * 8] = d[6 * 8] = d[7 * 8] =
           idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w[0] + 64) >> 7)];
@@ -160,7 +161,7 @@ void __stdcall idct_int32(int *block) {
     d[6 * 8] = idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w5 - w2 + 524288) >> 20)];
     d[7 * 8] = idct_clip_table[IDCT_CLIP_TABLE_OFFSET + ((w4 - w3 + 524288) >> 20)];
 
-    w++;
-    d++;
+    w += 1;
+    d += 1;
   }
 }

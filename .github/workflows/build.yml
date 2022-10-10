@@ -110,49 +110,48 @@ jobs:
           path: |
             msys2-clang_${{ matrix.build_configuration }}_mimalloc-${{ matrix.mimalloc }}.zip
 
-  msvc-cl:
-    runs-on: windows-latest
-
-    strategy:
-      matrix:
-        build_configuration: [Debug, Release]
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-          submodules: true
-
-      - name: Enable Developer Command Prompt
-        uses: ilammy/msvc-dev-cmd@v1.10.0
-        with:
-          arch: win32
-
-      - name: Build
-        working-directory: ${{env.GITHUB_WORKSPACE}}
-        run: |
-          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_MAKE_PROGRAM="C:\PROGRAM FILES\MICROSOFT VISUAL STUDIO\2022\ENTERPRISE\COMMON7\IDE\COMMONEXTENSIONS\MICROSOFT\CMAKE\Ninja\ninja.exe"
-          cmake --build build
-
-      - name: Create archive
-        working-directory: ${{env.GITHUB_WORKSPACE}}
-        run: |
-          7z a msvc-cl_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: msvc-cl
-          path: |
-            msvc-cl_${{ matrix.build_configuration }}.zip
+  #  msvc-cl:
+  #    runs-on: windows-latest
+  #
+  #    strategy:
+  #      matrix:
+  #        build_configuration: [Debug, Release]
+  #
+  #    steps:
+  #      - uses: actions/checkout@v3
+  #        with:
+  #          fetch-depth: 0
+  #          submodules: true
+  #
+  #      - name: Enable Developer Command Prompt
+  #        uses: ilammy/msvc-dev-cmd@v1.10.0
+  #        with:
+  #          arch: win32
+  #
+  #      - name: Build
+  #        working-directory: ${{env.GITHUB_WORKSPACE}}
+  #        run: |
+  #          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_MAKE_PROGRAM="C:\PROGRAM FILES\MICROSOFT VISUAL STUDIO\2022\ENTERPRISE\COMMON7\IDE\COMMONEXTENSIONS\MICROSOFT\CMAKE\Ninja\ninja.exe"
+  #          cmake --build build
+  #
+  #      - name: Create archive
+  #        working-directory: ${{env.GITHUB_WORKSPACE}}
+  #        run: |
+  #          7z a msvc-cl_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
+  #
+  #      - name: Upload artifact
+  #        uses: actions/upload-artifact@v3
+  #        with:
+  #          name: msvc-cl
+  #          path: |
+  #            msvc-cl_${{ matrix.build_configuration }}.zip
 
   msvc-clang:
     runs-on: windows-latest
 
     strategy:
       matrix:
-        build_configuration: [Debug, Release]
-        mimalloc: [on, off]
+        build_configuration: [ Debug, Release ]
 
     steps:
       - uses: actions/checkout@v3
@@ -168,17 +167,17 @@ jobs:
       - name: Build
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_C_COMPILER:FILEPATH="C:/PROGRAM FILES/MICROSOFT VISUAL STUDIO/2022/ENTERPRISE/VC/Tools/Llvm/bin/clang.exe" -DCMAKE_CXX_COMPILER:FILEPATH="C:/PROGRAM FILES/MICROSOFT VISUAL STUDIO/2022/ENTERPRISE/VC/Tools/Llvm/bin/clang++.exe" -DCMAKE_MAKE_PROGRAM="C:\PROGRAM FILES\MICROSOFT VISUAL STUDIO\2022\ENTERPRISE\COMMON7\IDE\COMMONEXTENSIONS\MICROSOFT\CMAKE\Ninja\ninja.exe" -DMIMALLOC=${{ matrix.mimalloc }}
+          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_C_COMPILER:FILEPATH="C:/PROGRAM FILES/MICROSOFT VISUAL STUDIO/2022/ENTERPRISE/VC/Tools/Llvm/bin/clang.exe" -DCMAKE_CXX_COMPILER:FILEPATH="C:/PROGRAM FILES/MICROSOFT VISUAL STUDIO/2022/ENTERPRISE/VC/Tools/Llvm/bin/clang++.exe" -DCMAKE_MAKE_PROGRAM="C:\PROGRAM FILES\MICROSOFT VISUAL STUDIO\2022\ENTERPRISE\COMMON7\IDE\COMMONEXTENSIONS\MICROSOFT\CMAKE\Ninja\ninja.exe"
           cmake --build build
 
       - name: Create archive
         working-directory: ${{env.GITHUB_WORKSPACE}}
         run: |
-          7z a msvc-clang_${{ matrix.build_configuration }}_mimalloc-${{ matrix.mimalloc }}.zip build\Custom-SmoothDfA.auf README.md
+          7z a msvc-clang_${{ matrix.build_configuration }}.zip build\Custom-SmoothDfA.auf README.md
 
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: msvc-clang
           path: |
-            msvc-clang_${{ matrix.build_configuration }}_mimalloc-${{ matrix.mimalloc }}.zip
+            msvc-clang_${{ matrix.build_configuration }}.zip

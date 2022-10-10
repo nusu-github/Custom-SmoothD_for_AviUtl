@@ -2,33 +2,35 @@
   DCT module used LLM algorithm (based IJG jfdctint.c)
  *******************************************************************/
 
-#define DCT_INT32_C
+#include <cstdint>
 
-#include "dct_int32.h"
+enum {
+  FIX_0_298631336 = 2446,
+  FIX_0_390180644 = 3196,
+  FIX_0_541196100 = 4433,
+  FIX_0_765366865 = 6270,
+  FIX_0_899976223 = 7373,
+  FIX_1_175875602 = 9633,
+  FIX_1_501321110 = 12299,
+  FIX_1_847759065 = 15137,
+  FIX_1_961570560 = 16069,
+  FIX_2_053119869 = 16819,
+  FIX_2_562915447 = 20995,
+  FIX_3_072711026 = 25172
+};
 
-#define FIX_0_298631336 2446
-#define FIX_0_390180644 3196
-#define FIX_0_541196100 4433
-#define FIX_0_765366865 6269
-#define FIX_0_899976223 7372
-#define FIX_1_175875602 9632
-#define FIX_1_501321110 12298
-#define FIX_1_847759065 15136
-#define FIX_1_961570560 16069
-#define FIX_2_053119869 16819
-#define FIX_2_562915447 20995
-#define FIX_3_072711026 25171
+#pragma omp declare simd uniform(block) inbranch
+void dct_int32(int_fast32_t &block) {
 
-void __stdcall dct_int32(int *block) {
+  int_fast32_t w0, w1, w2, w3, w4, w5, w6, w7;
+  int_fast32_t w10, w11, w12, w13;
+  int_fast32_t z1, z2, z3, z4, z5;
 
-  int w0, w1, w2, w3, w4, w5, w6, w7;
-  int w10, w11, w12, w13;
-  int z1, z2, z3, z4, z5;
+  int_fast32_t *s = &block;
+  int_fast32_t *w = &block;
 
-  int *s = block;
-  int *w = block;
-
-  for (int i = 0; i < 8; i++) {
+#pragma omp simd
+  for (int_fast16_t i = 0; i < 8; i++) {
     /* row DCT */
     w0   = s[0] + s[7];
     w7   = s[0] - s[7];
@@ -77,10 +79,11 @@ void __stdcall dct_int32(int *block) {
     s += 8;
   }
 
-  w      = block;
-  int *d = block;
+  w               = &block;
+  int_fast32_t *d = &block;
 
-  for (int i = 0; i < 8; i++) {
+#pragma omp simd
+  for (int_fast16_t i = 0; i < 8; i++) {
     /* col DCT */
     w0       = w[8 * 0] + w[8 * 7];
     w7       = w[8 * 0] - w[8 * 7];
