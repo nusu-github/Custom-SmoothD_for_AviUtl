@@ -15,29 +15,39 @@ constexpr int_fast8_t shift[] = {
 };
 
 struct smoothdfa_struct {
-  int_fast16_t threshold;    // 閾値
-  int_fast16_t quantization; // 量子化係数
-  int_fast16_t n_shift;      // DCT-iDCTを実行する回数
-  int_fast16_t zero_weight;  // ノイズ除去後の画像に混ぜる元の画像の割合
-  bool rounding_on;          // 8ビットの計算を丸めるか
-  bool all_quantization;     // すべて量子化するか
-  bool dct_on;               // 離散コサイン変換を使うか
+  int32_t *threshold;    // 閾値
+  int32_t *quantization; // 量子化係数
+  int32_t n_shift;       // DCT-iDCTを実行する回数
+  int32_t *zero_weight;  // ノイズ除去後の画像に混ぜる元の画像の割合
+  bool all_quantization; // すべて量子化するか
+  bool dct_on;           // 離散コサイン変換を使うか
 };
 
 struct main_smoothdfa_struct {
-  int_fast16_t pictur_width;  // 画像の幅
-  int_fast16_t pictur_height; // 画像の高さ
-  int_fast32_t pictur_size;   // 画像のサイズ
-  int_fast32_t mem_size;      // メモリのサイズ
+  int32_t pictur_width;  // 画像の幅
+  int32_t pictur_height; // 画像の高さ
+  int32_t pictur_size;   // 画像のサイズ
+  int32_t mem_size;      // メモリのサイズ
 };
 
-auto func_proc(AviUtl::FilterPlugin *fp, AviUtl::FilterProcInfo *fpip) -> BOOL;
 auto func_init(AviUtl::FilterPlugin *fp) -> BOOL;
 auto func_exit(AviUtl::FilterPlugin *fp) -> BOOL;
 auto func_update(AviUtl::FilterPlugin *fp, AviUtl::FilterPluginDLL::UpdateStatus status) -> BOOL;
+auto func_proc(AviUtl::FilterPlugin *fp, AviUtl::FilterProcInfo *fpip) -> BOOL;
 
 void get_multi_thread(int thread_id, int thread_num, void *param1, void * /*param2*/);
 
-void shift_data(int thread_id, int thread_num, void *param1, void * /*param2*/);
+void shift_data(int thread_id, int thread_num, void *param1, void *param2);
 void Loop(int thread_id, int thread_num, void *param1, void *param2);
-void copy_pix(AviUtl::FilterProcInfo *fpip, AviUtl::PixelYC *wsp, int shiftx, int shifty);
+void copy_pix(AviUtl::FilterProcInfo *fpip, AviUtl::PixelYC *wsp, const int32_t &shiftx, const int32_t &shifty);
+
+void transform_quantization(const int32_t &threshold, const int32_t &quantization, const bool &all_quantization,
+                            std::array<int32_t, 64> &block, std::array<int32_t, 64> &blockCb,
+                            std::array<int32_t, 64> &blockCr);
+
+void Loop_dct(AviUtl::FilterProcInfo *fpip, const int32_t &threshold, const int32_t &quantization,
+              const bool &all_quantization, const int &thread_id, const int16_t &shiftx, const int16_t &shifty,
+              const int16_t &xblock, const int16_t &yblock);
+void Loop_fwht(AviUtl::FilterProcInfo *fpip, const int32_t &threshold, const int32_t &quantization,
+               const bool &all_quantization, const int &thread_id, const int16_t &shiftx, const int16_t &shifty,
+               const int16_t &xblock, const int16_t &yblock);

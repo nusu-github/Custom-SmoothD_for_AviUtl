@@ -2,4 +2,4 @@
 
 #include <cstdint>
 
-void fwht(int_fast32_t &source);
+void fwht(int32_t &source);

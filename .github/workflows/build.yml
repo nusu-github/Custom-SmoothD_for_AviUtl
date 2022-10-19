@@ -58,7 +58,6 @@ jobs:
     strategy:
       matrix:
         build_configuration: [Debug, Release]
-        mimalloc: [on, off]
 
     steps:
       - uses: actions/checkout@v3
@@ -95,7 +94,7 @@ jobs:
         working-directory: ${{env.GITHUB_WORKSPACE}}
         shell: msys2 {0}
         run: |
-          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_C_FLAGS="--rtlib=compiler-rt -unwindlib=libunwind" -DCMAKE_CXX_FLAGS="-stdlib=libc++" -DMIMALLOC=${{ matrix.mimalloc }}
+          cmake -G "Ninja" -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_configuration }} -DCMAKE_C_FLAGS="--rtlib=compiler-rt -unwindlib=libunwind" -DCMAKE_CXX_FLAGS="-stdlib=libc++"
           cmake --build build
 
       - name: Create archive

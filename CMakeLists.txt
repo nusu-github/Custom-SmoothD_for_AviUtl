@@ -15,10 +15,13 @@ endif ()
 
 # Option list
 ## compile option
+option(STATIC-LINK "Enable static compile" ON)
 option(ENABLE_LTO "Enable LTO" OFF)
-## library option
-option(ENABLE_MIMALLOC "Enable mimalloc" OFF)
-
+option(ENABLE_PGO_GEN "Enable PGO generate" OFF)
+option(ENABLE_PGO_USE "Enable PGO use" OFF)
+option(NATIVE "Enable native compile" OFF)
+option(ENABLE_AVX512 "Enable AVX512" OFF)
+option(ENABLE_AVX2 "Enable AVX2" ON)
 
 # cmake tool
 include(CheckIPOSupported)
@@ -32,6 +35,14 @@ FetchContent_Declare(
         GIT_SHALLOW true
         GIT_PROGRESS true
 )
+## eve
+FetchContent_Declare(
+        eve
+        GIT_REPOSITORY "https://github.com/jfalcou/eve"
+        GIT_TAG "main"
+        GIT_SHALLOW true
+        GIT_PROGRESS true
+)
 FetchContent_MakeAvailable(aviutl_exedit_sdk)
 
 # Project settings
@@ -42,6 +53,12 @@ add_library(Custom-SmoothDfA SHARED ./src/SmoothDfA.cpp ./src/ht.cpp src/dct_int
 target_include_directories(Custom-SmoothDfA PRIVATE ./include)
 ### aviutl_exedit_sdk
 target_include_directories(Custom-SmoothDfA PRIVATE ${aviutl_exedit_sdk_SOURCE_DIR})
+### eve
+set(EVE_BUILD_TEST OFF CACHE BOOL false FORCE)
+set(EVE_BUILD_BENCHMARKS OFF CACHE BOOL false FORCE)
+set(EVE_BUILD_DOCUMENTATION OFF CACHE BOOL false FORCE)
+FetchContent_MakeAvailable(eve)
+target_link_libraries(Custom-SmoothDfA PRIVATE eve::eve)
 
 ## C++ standard
 target_compile_features(Custom-SmoothDfA PRIVATE cxx_std_20)
@@ -71,7 +88,11 @@ if (OpenMP_CXX_FOUND)
             message(FATAL_ERROR "OpenMP version is too old. Please update your compiler.")
         endif ()
     else ()
-        target_link_libraries(Custom-SmoothDfA PUBLIC OpenMP::OpenMP_CXX)
+        if (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
+            target_compile_options(Custom-SmoothDfA PRIVATE -Qopenmp-simd)
+        else ()
+            target_compile_options(Custom-SmoothDfA PRIVATE -fopenmp-simd)
+        endif ()
     endif ()
 else ()
     message(FATAL_ERROR "OpenMP not found. Please install OpenMP Library.")
@@ -143,15 +164,22 @@ if (MSVC)
         if (NATIVE)
             target_compile_options(Custom-SmoothDfA PRIVATE /QxHost)
         else ()
-            target_compile_options(Custom-SmoothDfA PRIVATE /QxAVX2)
+            if (ENABLE_AVX512)
+                target_compile_options(Custom-SmoothDfA PRIVATE /QxAVX512)
+            elseif (ENABLE_AVX2)
+                target_compile_options(Custom-SmoothDfA PRIVATE /QxAVX2)
+            endif ()
         endif ()
 
         target_compile_options(Custom-SmoothDfA PRIVATE /Qopt-report:2)
         target_compile_options(Custom-SmoothDfA PRIVATE /Qvec /Qopt-multiple-gather-scatter-by-shuffles /Qopt-dynamic-align)
 
     else ()
-
-        target_compile_options(Custom-SmoothDfA PRIVATE -arch:AVX2)
+        if (ENABLE_AVX512)
+            target_compile_options(Custom-SmoothDfA PRIVATE /arch:AVX512)
+        elseif (ENABLE_AVX2)
+            target_compile_options(Custom-SmoothDfA PRIVATE -arch:AVX2)
+        endif ()
 
         target_compile_options(Custom-SmoothDfA PRIVATE -Qvec-report:2)
 
@@ -167,13 +195,35 @@ else ()
         message(STATUS "Compiler is GCC")
     endif ()
 
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-        target_compile_options(Custom-SmoothDfA PRIVATE -march=x86-64-v3)
+    target_link_options(Custom-SmoothDfA PRIVATE -s)
+
+    if (NATIVE)
+        target_compile_options(Custom-SmoothDfA PRIVATE -march=native -mtune=native)
     else ()
-        target_compile_options(Custom-SmoothDfA PRIVATE -march=x86-64-v3)
+        if (ENABLE_AVX512)
+            target_compile_options(Custom-SmoothDfA PRIVATE -march=x86-64-v4)
+        elseif (ENABLE_AVX2)
+            target_compile_options(Custom-SmoothDfA PRIVATE -march=x86-64-v3)
+        endif ()
     endif ()
 
-    # static link
-    target_link_options(Custom-SmoothDfA PRIVATE -s -static -save-temps)
+    if (ENABLE_PGO_GEN)
+        target_compile_options(Custom-SmoothDfA PRIVATE -fprofile-generate -fprofile-update=atomic)
+        target_link_options(Custom-SmoothDfA PRIVATE -fprofile-generate -fprofile-update=atomic)
+    elseif (ENABLE_PGO_USE)
+        target_compile_options(Custom-SmoothDfA PRIVATE -fprofile-use)
+    endif ()
+
+    if (CMAKE_BUILD_TYPE STREQUAL "Release")
+        target_compile_options(Custom-SmoothDfA PRIVATE -ffast-math -freciprocal-math)
+    endif ()
+
+    if (STATIC_LINK)
+        target_link_options(Custom-SmoothDfA PRIVATE -static)
+    endif ()
+
+    if (SAVE_TEMPS)
+        target_compile_options(Custom-SmoothDfA PRIVATE -save-temps)
+    endif ()
 
 endif ()

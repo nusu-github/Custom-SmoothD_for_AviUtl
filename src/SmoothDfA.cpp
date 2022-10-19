@@ -54,9 +54,12 @@ AviUtlでは、速度と作者の趣味のため、直交変換にアダマール変換を使用しています。と
 ・ソースの整理。12ビット→8ビットの処理をマルチスレッドに。
 */
 // C++ stl
-#include <algorithm>
+#include <array>
 #include <cmath>
 #include <span>
+
+#include <eve/module/core.hpp>
+#include <eve/wide.hpp>
 
 // Main Library
 #include "dct_int32.hpp"
@@ -70,7 +73,7 @@ AviUtl::PixelYC *work_space;
 
 // グローバル変数
 // スレッド数
-int_fast32_t MT = 1;
+int32_t MT = 1;
 // パラメーター系
 smoothdfa_struct smoothdfa;
 
@@ -115,23 +118,26 @@ AviUtl::FilterPluginDLL filter{
 //---------------------------------------------------------------------
 //  フィルタ構造体のポインタを渡す関数
 //---------------------------------------------------------------------
-extern "C" auto GetFilterTable(void) -> AviUtl::FilterPluginDLL * { return &filter; }
+extern "C" [[maybe_unused]] AviUtl::FilterPluginDLL *GetFilterTable(void) { return &filter; }
 
 //---------------------------------------------------------------------
 //  Aviutl初期化関数
 //---------------------------------------------------------------------
-auto func_init(AviUtl::FilterPlugin *fp) -> BOOL {
-  // マルチスレッド数を取得
-  fp->exfunc->exec_multi_thread_func(get_multi_thread, &MT, nullptr);
+BOOL func_init(AviUtl::FilterPlugin *fp) {
+
+  smoothdfa.threshold = &fp->track[0]; // 閾値。直交変換後の周波数の値がこの値以下ならば量子化を行う。
+  smoothdfa.quantization = &fp->track[1]; // 量子化係数。
+  smoothdfa.zero_weight  = &fp->track[3]; // ノイズ除去後の画像に混ぜる元の画像の割合
 
   return TRUE;
 }
 
 //---------------------------------------------------------------------
-//  Aviutl初期化関数
+//  Aviutl終了処理関数
 //---------------------------------------------------------------------
-auto func_exit(AviUtl::FilterPlugin * /*fp*/) -> BOOL {
-  delete[] work_space;
+BOOL func_exit(AviUtl::FilterPlugin * /*fp*/) {
+  _aligned_free(work_space);
+
   main_smoothdfa.pictur_width  = 0;
   main_smoothdfa.pictur_height = 0;
   main_smoothdfa.pictur_size   = 0;
@@ -143,49 +149,53 @@ auto func_exit(AviUtl::FilterPlugin * /*fp*/) -> BOOL {
 //---------------------------------------------------------------------
 //  トラックバーの変更時に呼ばれる関数
 //---------------------------------------------------------------------
-auto func_update(AviUtl::FilterPlugin *fp, AviUtl::FilterPluginDLL::UpdateStatus /*status*/) -> BOOL {
+BOOL func_update(AviUtl::FilterPlugin *fp, AviUtl::FilterPluginDLL::UpdateStatus /*status*/) {
+
+  // マルチスレッド数を取得
+  fp->exfunc->exec_multi_thread_func(get_multi_thread, &MT, nullptr);
+
   // トラック番号を間違えないためトラックの値を変数に代入しておく
-  smoothdfa.threshold = fp->track[0]; // 閾値。直交変換後の周波数の値がこの値以下ならば量子化を行う。
-  smoothdfa.quantization = fp->track[1];                                               // 量子化係数。
-  smoothdfa.n_shift = static_cast<int_fast16_t>(std::ceil(std::pow(2, fp->track[2]))); // DCT-iDCTを実行する回数
-  smoothdfa.zero_weight      = fp->track[3]; // ノイズ除去後の画像に混ぜる元の画像の割合
-  smoothdfa.dct_on           = static_cast<bool>(fp->check[0]); // 茂木氏作のDCT-iDCTを使用するかどうか
-  smoothdfa.rounding_on      = static_cast<bool>(fp->check[1]); // 8bitにする時に四捨五入するかどうか
+  smoothdfa.n_shift = static_cast<int32_t>(std::ceil(std::pow(2, fp->track[2]))); // DCT-iDCTを実行する回数
+  smoothdfa.dct_on  = static_cast<bool>(fp->check[0]);          // 茂木氏作のDCT-iDCTを使用するかどうか
   smoothdfa.all_quantization = static_cast<bool>(fp->check[2]); // 全て量子化するかどうか
+
   return TRUE;
 }
 
 //---------------------------------------------------------------------
 //  フィルタ処理関数
 //---------------------------------------------------------------------
-auto func_proc(AviUtl::FilterPlugin *fp, AviUtl::FilterProcInfo *fpip) -> BOOL {
+BOOL func_proc(AviUtl::FilterPlugin *fp, AviUtl::FilterProcInfo *fpip) {
 
   // 画像の幅と高さが変わっていたら初期化
   if (main_smoothdfa.pictur_width != fpip->w || main_smoothdfa.pictur_height != fpip->h) {
-    delete[] work_space;
+    _aligned_free(work_space);
 
     main_smoothdfa.pictur_width  = fpip->w;
     main_smoothdfa.pictur_height = fpip->h;
     main_smoothdfa.pictur_size   = fpip->w * fpip->h;
     main_smoothdfa.mem_size      = sizeof(AviUtl::PixelYC) * main_smoothdfa.pictur_size * MT;
     // マルチスレッド数だけ画像サイズのメモリを確保して0で埋める。
-    work_space = new AviUtl::PixelYC[main_smoothdfa.mem_size]{};
+    // アライメントされたメモリを確保するためにmallocを使用。
+    work_space = (AviUtl::PixelYC *)_aligned_malloc(main_smoothdfa.mem_size, alignof(AviUtl::PixelYC));
+  } else {
+    // メモリを0で埋める
+    ZeroMemory(work_space, main_smoothdfa.mem_size);
   }
 
-  const int_fast16_t zero_weight = smoothdfa.zero_weight;
-  const int_fast16_t n_shift     = smoothdfa.n_shift;
+  const int32_t &zero_weight = *smoothdfa.zero_weight;
+  const int32_t &n_shift     = smoothdfa.n_shift;
 
   // 画素データを8ビット化する。マルチスレッドにしてみました。
-  fp->exfunc->exec_multi_thread_func(shift_data, fpip, nullptr);
+  fp->exfunc->exec_multi_thread_func(shift_data, fpip, &fp->check[1]);
 
   /*
   以下でぼかした画像を作業領域に加算する処理を繰り返す
   マルチスレッドで関数を呼び出して並列で処理しています。なのでn_shiftの値に関係なく4スレッドならば最低4回、そして4の倍数ずつ処理することになります。
   */
-  int_fast16_t count = zero_weight;
+  int32_t count = zero_weight;
 
-  for (int_fast16_t i = 0; i < n_shift; i += MT) {
-    // Loop(omp_get_thread_num(), omp_get_max_threads(), fpip, &i);
+  for (int32_t i = 0; i < n_shift; i += MT) {
     fp->exfunc->exec_multi_thread_func(Loop, fpip, &i);
     count += MT;
   }
@@ -194,19 +204,17 @@ auto func_proc(AviUtl::FilterPlugin *fp, AviUtl::FilterProcInfo *fpip) -> BOOL {
   作業領域に加算された値を変数 temp
   に合計、元画像をzero_weightだけ乗算して、12ビット化してから count で除算。
   */
-
-  for (int_fast16_t y = 0; y < fpip->h; y++) {
+  for (int32_t y = 0; y < fpip->h; ++y) {
     const std::span span_ycp(static_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + y * fpip->max_w, fpip->w);
-    for (int_fast16_t x = 0; x < fpip->w; x++) {
+    for (int32_t x = 0; x < fpip->w; ++x) {
       AviUtl::PixelYC &ycp = span_ycp[x];
       AviUtl::PixelYC temp = {};
 
-      for (int_fast16_t i = 0; i < MT; i++) {
-        AviUtl::PixelYC &wsp = work_space[y * fpip->w + x + main_smoothdfa.pictur_size * i];
+      for (int32_t i = 0; i < MT; ++i) {
+        const AviUtl::PixelYC &wsp = work_space[y * fpip->w + x + main_smoothdfa.pictur_size * i];
         temp.y += wsp.y;
         temp.cb += wsp.cb;
         temp.cr += wsp.cr;
-        wsp = {};
       }
 
       ycp.y  = ((ycp.y * zero_weight + temp.y) << 4) / count;
@@ -221,38 +229,48 @@ auto func_proc(AviUtl::FilterPlugin *fp, AviUtl::FilterProcInfo *fpip) -> BOOL {
 //---------------------------------------------------------------------
 //  画素データ8ビット化関数
 //---------------------------------------------------------------------
-void shift_data(int thread_id, int thread_num, void *param1, void * /*param2*/) {
+void shift_data(int thread_id, int thread_num, void *param1, void *param2) {
+
+  if ((thread_id & 0x1) != 0)
+    return;
+  thread_id  = thread_id >> 1;
+  thread_num = (thread_num + 1) >> 1;
 
   // マルチスレッド対応サンプルフィルタの方法そのままでマルチスレッド処理をしています
-  const auto *fpip       = static_cast<AviUtl::FilterProcInfo *>(param1);
+  const auto &fpip        = static_cast<AviUtl::FilterProcInfo *>(param1);
 
-  const auto rounding_on = smoothdfa.rounding_on;
+  const auto &rounding_on = static_cast<bool *>(param2); // 8bitにする時に四捨五入するかどうか
   //	スレッド毎の画像を処理する場所を計算する
-  const int_fast16_t y_start = fpip->h * thread_id / thread_num;
-  const int_fast16_t y_end   = fpip->h * (thread_id + 1) / thread_num;
+  const int32_t &y_start = fpip->h * thread_id / thread_num;
+  const int32_t &y_end   = fpip->h * (thread_id + 1) / thread_num;
 
   /*
    *	12ビットは一般的でないことと、加算していくと飽和してしまうかもしれないので、画素データのビット数を落とす。
    *	輝度と色差、どちらも8ビットに。
    */
 
-  if (rounding_on) {
-    for (int_fast16_t y = y_start; y < y_end; y++) {
-      const std::span span_ycp(static_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + y * fpip->max_w, fpip->w);
-      std::for_each(span_ycp.begin(), span_ycp.end(), [&](AviUtl::PixelYC &ycp) {
-        ycp.y  = (ycp.y * 100 / 16 + 45) / 100;
-        ycp.cb = ycp.cb > 0 ? (ycp.cb * 100 / 16 + 45) / 100 : (ycp.cb * 100 / 16 - 45) / 100;
-        ycp.cr = ycp.cr > 0 ? (ycp.cr * 100 / 16 + 45) / 100 : (ycp.cr * 100 / 16 - 45) / 100;
-      });
+  const auto x_end = fpip->w * 3;
+
+  if (*rounding_on) {
+    for (int32_t y = y_start; y < y_end; ++y) {
+      constexpr auto loop_count = eve::expected_cardinal<int32_t>() * 2; // コンパイル時にSIMDのレーン数を取得する
+      auto *ycp = static_cast<int16_t *>(fpip->ycp_edit) + (y * fpip->max_w) * 3;
+      for (int32_t x = 0; x < x_end; x += loop_count) {
+        const eve::wide<int16_t, eve::fixed<loop_count>> _ycp{&ycp[x]};
+        const auto _ycp2 = eve::if_else(_ycp > 0, ((eve::int32(_ycp) * 100 / 16 + 45) / 100),
+                                        ((eve::int32(_ycp) * 100 / 16 - 45) / 100));
+        eve::store(eve::int16(_ycp2), ycp + x);
+      }
     }
   } else {
-    for (int_fast16_t y = y_start; y < y_end; y++) {
-      const std::span span_ycp(static_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + y * fpip->max_w, fpip->w);
-      std::for_each(span_ycp.begin(), span_ycp.end(), [&](AviUtl::PixelYC &ycp) {
-        ycp.y >>= 4;
-        ycp.cb >>= 4;
-        ycp.cr >>= 4;
-      });
+    for (int32_t y = y_start; y < y_end; ++y) {
+      constexpr auto loop_count = eve::expected_cardinal<int16_t>() * 2; // コンパイル時にSIMDのレーン数を取得する
+      auto *ycp = static_cast<int16_t *>(fpip->ycp_edit) + (y * fpip->max_w) * 3;
+      for (int32_t x = 0; x < x_end; x += loop_count) {
+        eve::wide<int16_t, eve::fixed<loop_count>> _ycp{&ycp[x]};
+        _ycp >>= 4;
+        eve::store(_ycp, ycp + x);
+      }
     }
   }
 }
@@ -262,82 +280,34 @@ void shift_data(int thread_id, int thread_num, void *param1, void * /*param2*/) 
 //---------------------------------------------------------------------
 void Loop(int thread_id, int /*thread_num*/, void *param1, void *param2) {
 
-  auto *fpip                      = static_cast<AviUtl::FilterProcInfo *>(param1);
+  if ((thread_id & 0x1) != 0)
+    return;
+  thread_id                    = thread_id >> 1;
 
-  const int_fast16_t threshold    = smoothdfa.threshold;
-  const int_fast16_t quantization = smoothdfa.quantization;
-  const bool all_quantization     = smoothdfa.all_quantization;
-  const bool dct_on               = smoothdfa.dct_on;
+  auto *fpip                   = static_cast<AviUtl::FilterProcInfo *>(param1);
+
+  const int32_t &threshold     = *smoothdfa.threshold;
+  const int32_t &quantization  = *smoothdfa.quantization;
+  const bool &all_quantization = smoothdfa.all_quantization;
+  const bool &dct_on           = smoothdfa.dct_on;
 
   // DCT-iDCTの開始位置
-  const int_fast16_t shiftx = shift[(*static_cast<int_fast16_t *>(param2) + thread_id) * 2];
-  const int_fast16_t shifty = shift[(*static_cast<int_fast16_t *>(param2) + thread_id) * 2 + 1];
+  const int16_t &shiftx = shift[(*static_cast<int32_t *>(param2) + thread_id) * 2];
+  const int16_t &shifty = shift[(*static_cast<int32_t *>(param2) + thread_id) * 2 + 1];
   // 0,0からずらしてDCT-iDCTをおこなうので画像の端まで処理はしない
-  const int_fast16_t h = fpip->h - 8;
-  const int_fast16_t w = fpip->w - 8;
+  const int16_t h = fpip->h - 8;
+  const int16_t w = fpip->w - 8;
 
-  for (int_fast16_t yblock = shifty; yblock < h; yblock += 8) {
-    for (int_fast16_t xblock = shiftx; xblock < w; xblock += 8) {
-
-      int_fast32_t block[64]{};
-      int_fast32_t blockCb[64]{};
-      int_fast32_t blockCr[64]{};
-
-      // 8*8のブロックに画像を代入する
-      for (int_fast16_t y = 0; y < 8; y++) {
-        std::span span_ycp(static_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + (y + yblock) * fpip->max_w + xblock, 8);
-        for (int_fast16_t x = 0; x < 8; x++) {
-          const auto &ycp    = span_ycp[x];
-          block[x + y * 8]   = ycp.y;
-          blockCb[x + y * 8] = ycp.cb;
-          blockCr[x + y * 8] = ycp.cr;
-        }
+  if (dct_on) {
+    for (int16_t yblock = shifty; yblock < h; yblock += 8) {
+      for (int16_t xblock = shiftx; xblock < w; xblock += 8) {
+        Loop_dct(fpip, threshold, quantization, all_quantization, thread_id, shiftx, shifty, xblock, yblock);
       }
-
-      /*
-       * 直交変換をし閾値以下の値に量子化を行います。試してみたところ、n_shiftの値を少なくすると、"閾値以下の値を0"の処理では輪郭に粗ができました。閾値を少し高くし量子化を行うことで、少しぼけるものの、n_shiftの値が小さくとも輪郭の粗は目立たなくなりました。
-       * 高速化のため、色差は量子化ではなく0にします。見た目は違いが分かりません。
-       * なお、圧縮するわけではないので、直流成分はそのままにするべく、iは1からスタートしています。
-       */
-      if (dct_on) {
-        dct_int32(*block);   // 離散コサイン変換
-        dct_int32(*blockCb); // 離散コサイン変換
-        dct_int32(*blockCr); // 離散コサイン変換
-      } else {
-        fwht(*block);   // アダマール変換
-        fwht(*blockCb); // アダマール変換
-        fwht(*blockCr); // アダマール変換
-      }
-
-#pragma omp simd
-      for (int_fast16_t i = 1; i < 64; i++) {
-        block[i]   = std::abs(block[i]) < threshold ? block[i] / quantization * quantization : block[i];
-        blockCb[i] = std::abs(blockCb[i]) < threshold ? all_quantization ? blockCb[i] / quantization * quantization : 0
-                                                      : blockCb[i];
-        blockCr[i] = std::abs(blockCr[i]) < threshold ? all_quantization ? blockCr[i] / quantization * quantization : 0
-                                                      : blockCr[i];
-      }
-
-      if (dct_on) {
-        idct_int32(*block);   // 離散コサイン変換
-        idct_int32(*blockCb); // 離散コサイン変換
-        idct_int32(*blockCr); // 離散コサイン変換
-      } else {
-        fwht(*block);   // アダマール変換
-        fwht(*blockCb); // アダマール変換
-        fwht(*blockCr); // アダマール変換
-      }
-
-      // 直接テンポラリ領域に書き込むと画像にゴミが出るため、一度work_spaceにぼかしたブロックを代入する。
-      // おそらくマルチスレッドで同時に同じメモリの場所に書き込むことからの不具合と思われます。
-      for (int_fast16_t y = 0; y < 8; y++) {
-        std::span span_ycp(work_space + (y + yblock) * fpip->w + xblock + fpip->w * fpip->h * thread_id, 8);
-        for (int_fast16_t x = 0; x < 8; x++) {
-          auto &ycp = span_ycp[x];
-          ycp.y += block[x + y * 8];
-          ycp.cb += blockCb[x + y * 8];
-          ycp.cr += blockCr[x + y * 8];
-        }
+    }
+  } else {
+    for (int16_t yblock = shifty; yblock < h; yblock += 8) {
+      for (int16_t xblock = shiftx; xblock < w; xblock += 8) {
+        Loop_fwht(fpip, threshold, quantization, all_quantization, thread_id, shiftx, shifty, xblock, yblock);
       }
     }
   }
@@ -351,7 +321,7 @@ void Loop(int thread_id, int /*thread_num*/, void *param1, void *param2) {
 //---------------------------------------------------------------------
 void get_multi_thread(int thread_id, int thread_num, void *param1, void * /*param2*/) {
   if (thread_id == 0) {
-    *static_cast<int_fast16_t *>(param1) = thread_num;
+    *static_cast<int32_t *>(param1) = thread_num / 2;
   }
 }
 
@@ -361,12 +331,12 @@ void get_multi_thread(int thread_id, int thread_num, void *param1, void * /*para
 /*
 長くなるので関数にして隔離。
 */
-void copy_pix(AviUtl::FilterProcInfo *fpip, AviUtl::PixelYC *wsp, int shiftx, int shifty) {
+void copy_pix(AviUtl::FilterProcInfo *fpip, AviUtl::PixelYC *wsp, const int32_t &shiftx, const int32_t &shifty) {
 
-  for (int_fast16_t y = 0; y < shifty; y++) {
+  for (int32_t y = 0; y < shifty; ++y) {
     std::span span_ycp(static_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + y * fpip->max_w, fpip->w);
     std::span span_ycp2(wsp + y * fpip->w, fpip->w);
-    for (int_fast16_t x = 0; x < fpip->w; x++) {
+    for (int32_t x = 0; x < fpip->w; ++x) {
       const AviUtl::PixelYC &ycp = span_ycp[x];
       AviUtl::PixelYC &ycp2      = span_ycp2[x];
       ycp2.y += ycp.y;
@@ -375,10 +345,10 @@ void copy_pix(AviUtl::FilterProcInfo *fpip, AviUtl::PixelYC *wsp, int shiftx, in
     }
   }
 
-  for (int_fast16_t y = fpip->h - (8 - shifty); y < fpip->h; y++) {
+  for (int32_t y = fpip->h - (8 - shifty); y < fpip->h; ++y) {
     std::span span_ycp(static_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + y * fpip->max_w, fpip->w);
     std::span span_ycp2(wsp + y * fpip->w, fpip->w);
-    for (int_fast16_t x = 0; x < fpip->w; x++) {
+    for (int32_t x = 0; x < fpip->w; ++x) {
       const AviUtl::PixelYC &ycp = span_ycp[x];
       AviUtl::PixelYC &ycp2      = span_ycp2[x];
       ycp2.y += ycp.y;
@@ -387,10 +357,10 @@ void copy_pix(AviUtl::FilterProcInfo *fpip, AviUtl::PixelYC *wsp, int shiftx, in
     }
   }
 
-  for (int_fast16_t y = shifty; y < fpip->h - (8 - shifty); y++) {
+  for (int32_t y = shifty; y < fpip->h - (8 - shifty); ++y) {
     std::span span_ycp(static_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + y * fpip->max_w, shiftx);
     std::span span_ycp2(wsp + y * fpip->w, shiftx);
-    for (int_fast16_t x = 0; x < shiftx; x++) {
+    for (int32_t x = 0; x < shiftx; ++x) {
       const AviUtl::PixelYC &ycp = span_ycp[x];
       AviUtl::PixelYC &ycp2      = span_ycp2[x];
       ycp2.y += ycp.y;
@@ -399,16 +369,132 @@ void copy_pix(AviUtl::FilterProcInfo *fpip, AviUtl::PixelYC *wsp, int shiftx, in
     }
   }
 
-  for (int_fast16_t y = shifty; y < fpip->h - (8 - shifty); y++) {
+  for (int32_t y = shifty; y < fpip->h - (8 - shifty); ++y) {
     std::span span_ycp(static_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + y * fpip->max_w + fpip->w - (8 - shiftx),
                        fpip->w);
     std::span span_ycp2(wsp + y * fpip->w + fpip->w - (8 - shiftx), fpip->w);
-    for (int_fast16_t x = fpip->w - (8 - shiftx); x < fpip->w; x++) {
+    for (int32_t x = fpip->w - (8 - shiftx); x < fpip->w; ++x) {
       const AviUtl::PixelYC &ycp = span_ycp[x - (fpip->w - (8 - shiftx))];
       AviUtl::PixelYC &ycp2      = span_ycp2[x - (fpip->w - (8 - shiftx))];
       ycp2.y += ycp.y;
       ycp2.cb += ycp.cb;
       ycp2.cr += ycp.cr;
+    }
+  }
+}
+
+//---------------------------------------------------------------------
+//  直交変換後量子化関数
+//---------------------------------------------------------------------
+/*
+ * 直交変換をし閾値以下の値に量子化を行います。試してみたところ、n_shiftの値を少なくすると、閾値以下の値を0"の処理では輪郭に粗ができました。閾値を少し高くし量子化を行うことで、少しぼけるものの、n_shiftの値が小さくとも輪郭の粗は目立たなくなりました。
+ * 高速化のため、色差は量子化ではなく0にします。見た目は違いが分かりません。
+ * なお、圧縮するわけではないので、直流成分はそのままにするべく、iは1からスタートしています。
+ */
+void transform_quantization(const int32_t &threshold, const int32_t &quantization, const bool &all_quantization,
+                            std::array<int32_t, 64> &block, std::array<int32_t, 64> &blockCb,
+                            std::array<int32_t, 64> &blockCr) {
+  constexpr auto loop_count = eve::expected_cardinal<int32_t>(); // コンパイル時にSIMDのレーン数を取得する
+
+  int32_t first_block   = block[0];
+  int32_t first_blockCb = blockCb[0];
+  int32_t first_blockCr = blockCr[0];
+  for (int32_t i = 0; i < 64; i += loop_count) {
+    eve::wide<int32_t, eve::fixed<loop_count>> _block{&block[i]};
+    eve::wide<int32_t, eve::fixed<loop_count>> _blockCb{&blockCb[i]};
+    eve::wide<int32_t, eve::fixed<loop_count>> _blockCr{&blockCr[i]};
+    if (all_quantization) {
+      _block   = eve::if_else(eve::abs(_block) < threshold, _block / quantization * quantization, _block);
+      _blockCb = eve::if_else(eve::abs(_blockCb) < threshold, _blockCb / quantization * quantization, _blockCb);
+      _blockCr = eve::if_else(eve::abs(_blockCr) < threshold, _blockCr / quantization * quantization, _blockCr);
+    } else {
+      _block   = eve::if_else(eve::abs(_block) < threshold, 0, _block);
+      _blockCb = eve::if_else(eve::abs(_blockCb) < threshold, 0, _blockCb);
+      _blockCr = eve::if_else(eve::abs(_blockCr) < threshold, 0, _blockCr);
+    }
+    eve::store(_block, &block[i]);
+    eve::store(_blockCb, &blockCb[i]);
+    eve::store(_blockCr, &blockCr[i]);
+  }
+  block[0]   = first_block;
+  blockCb[0] = first_blockCb;
+  blockCr[0] = first_blockCr;
+}
+
+void Loop_dct(AviUtl::FilterProcInfo *fpip, const int32_t &threshold, const int32_t &quantization,
+              const bool &all_quantization, const int &thread_id, const int16_t &shiftx, const int16_t &shifty,
+              const int16_t &xblock, const int16_t &yblock) {
+  std::array<int32_t, 64> block{}, blockCb{}, blockCr{};
+
+  // 8*8のブロックに画像を代入する
+  for (int16_t y = 0; y < 8; ++y) {
+    std::span span_ycp(static_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + (y + yblock) * fpip->max_w + xblock, 8);
+    for (int16_t x = 0; x < 8; x++) {
+      const auto &ycp    = span_ycp[x];
+      block[x + y * 8]   = ycp.y;
+      blockCb[x + y * 8] = ycp.cb;
+      blockCr[x + y * 8] = ycp.cr;
+    }
+  }
+
+  dct_int32(*block.data());   // 離散コサイン変換
+  dct_int32(*blockCb.data()); // 離散コサイン変換
+  dct_int32(*blockCr.data()); // 離散コサイン変換
+
+  transform_quantization(threshold, quantization, all_quantization, block, blockCb, blockCr);
+
+  idct_int32(*block.data());   // 離散コサイン変換
+  idct_int32(*blockCb.data()); // 離散コサイン変換
+  idct_int32(*blockCr.data()); // 離散コサイン変換
+
+  // 直接テンポラリ領域に書き込むと画像にゴミが出るため、一度work_spaceにぼかしたブロックを代入する。
+  // おそらくマルチスレッドで同時に同じメモリの場所に書き込むことからの不具合と思われます。
+  for (int16_t y = 0; y < 8; ++y) {
+    std::span span_ycp(work_space + (y + yblock) * fpip->w + xblock + fpip->w * fpip->h * thread_id, 8);
+    for (int16_t x = 0; x < 8; x++) {
+      auto &ycp = span_ycp[x];
+      ycp.y += block[x + y * 8];
+      ycp.cb += blockCb[x + y * 8];
+      ycp.cr += blockCr[x + y * 8];
+    }
+  }
+}
+
+void Loop_fwht(AviUtl::FilterProcInfo *fpip, const int32_t &threshold, const int32_t &quantization,
+               const bool &all_quantization, const int &thread_id, const int16_t &shiftx, const int16_t &shifty,
+               const int16_t &xblock, const int16_t &yblock) {
+  std::array<int32_t, 64> block{}, blockCb{}, blockCr{};
+
+  // 8*8のブロックに画像を代入する
+  for (int16_t y = 0; y < 8; ++y) {
+    std::span span_ycp(static_cast<AviUtl::PixelYC *>(fpip->ycp_edit) + (y + yblock) * fpip->max_w + xblock, 8);
+    for (int16_t x = 0; x < 8; x++) {
+      const auto &ycp    = span_ycp[x];
+      block[x + y * 8]   = ycp.y;
+      blockCb[x + y * 8] = ycp.cb;
+      blockCr[x + y * 8] = ycp.cr;
+    }
+  }
+
+  fwht(*block.data());   // アダマール変換
+  fwht(*blockCb.data()); // アダマール変換
+  fwht(*blockCr.data()); // アダマール変換
+
+  transform_quantization(threshold, quantization, all_quantization, block, blockCb, blockCr);
+
+  fwht(*block.data());   // アダマール変換
+  fwht(*blockCb.data()); // アダマール変換
+  fwht(*blockCr.data()); // アダマール変換
+
+  // 直接テンポラリ領域に書き込むと画像にゴミが出るため、一度work_spaceにぼかしたブロックを代入する。
+  // おそらくマルチスレッドで同時に同じメモリの場所に書き込むことからの不具合と思われます。
+  for (int16_t y = 0; y < 8; ++y) {
+    std::span span_ycp(work_space + (y + yblock) * fpip->w + xblock + fpip->w * fpip->h * thread_id, 8);
+    for (int16_t x = 0; x < 8; x++) {
+      auto &ycp = span_ycp[x];
+      ycp.y += block[x + y * 8];
+      ycp.cb += blockCb[x + y * 8];
+      ycp.cr += blockCr[x + y * 8];
     }
   }
 }

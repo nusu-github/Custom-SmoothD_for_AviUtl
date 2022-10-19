@@ -2,7 +2,7 @@
   DCT module used LLM algorithm (based IJG jfdctint.c)
  *******************************************************************/
 
-#include <cstdint>
+#include "dct_int32.hpp"
 
 enum {
   FIX_0_298631336 = 2446,
@@ -19,18 +19,16 @@ enum {
   FIX_3_072711026 = 25172
 };
 
-#pragma omp declare simd uniform(block) inbranch
-void dct_int32(int_fast32_t &block) {
+void dct_int32(int32_t &block) {
 
-  int_fast32_t w0, w1, w2, w3, w4, w5, w6, w7;
-  int_fast32_t w10, w11, w12, w13;
-  int_fast32_t z1, z2, z3, z4, z5;
+  int32_t w0, w1, w2, w3, w4, w5, w6, w7;
+  int32_t w10, w11, w12, w13;
+  int32_t z1, z2, z3, z4, z5;
 
-  int_fast32_t *s = &block;
-  int_fast32_t *w = &block;
+  int32_t *s = &block;
+  int32_t *w = &block;
 
-#pragma omp simd
-  for (int_fast16_t i = 0; i < 8; i++) {
+  for (uint8_t i = 0; i < 8; ++i) {
     /* row DCT */
     w0   = s[0] + s[7];
     w7   = s[0] - s[7];
@@ -79,11 +77,10 @@ void dct_int32(int_fast32_t &block) {
     s += 8;
   }
 
-  w               = &block;
-  int_fast32_t *d = &block;
+  w          = &block;
+  int32_t *d = &block;
 
-#pragma omp simd
-  for (int_fast16_t i = 0; i < 8; i++) {
+  for (uint8_t i = 0; i < 8; ++i) {
     /* col DCT */
     w0       = w[8 * 0] + w[8 * 7];
     w7       = w[8 * 0] - w[8 * 7];
